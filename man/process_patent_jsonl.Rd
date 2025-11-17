@@ -7,9 +7,11 @@
 process_patent_jsonl(file_path, max_records = NULL, verbose = TRUE)
 }
 \arguments{
-\item{file_path}{A path to a jsonl file exported from lens.org}
+\item{file_path}{A path to a jsonl file exported from lens.org.}
 
-\item{max_records}{The maximum number of records to be extracted}
+\item{max_records}{The maximum number of records to be extracted.}
+
+\item{verbose}{Extra information return from the function.}
 }
 \value{
 Returns a dataframe with: "lens_id"  ,            "jurisdiction"     ,    "doc_number" ,          "kind"
@@ -23,7 +25,7 @@ This extracts information from a lens.org patent export
 }
 \examples{
 library(purrr)
-library(tidyverse)
+library(dplyr)
 example_file <- system.file("extdata", "lens-export-3.jsonl", package = "NetworkIsLifeR")
 process_patent_jsonl(example_file)
 }

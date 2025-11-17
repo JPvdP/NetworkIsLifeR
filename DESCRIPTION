@@ -3,8 +3,8 @@ Title: Package for some UU data courses
 Version: 0.0.0.9000
 Authors@R: 
     person("J.P.G", "van der Pol", , "j.p.g.vanderpol@uu.nl", role = c("aut", "cre"))
-Description: This package contains specific functions for data related tasks. While the functions are usefull in general, the package was dsigned for student of the Innometrics course and the Data Analytics for Sustainability Course at Utrecht University.
-License: `use_mit_license()`
+Description: This package contains specific functions for data related tasks. While the functions are useful in general, the package was designed for student of the Innometrics course and the Data Analytics for Sustainability Course at Utrecht University.
+License: MIT + file LICENSE
 Encoding: UTF-8
 Roxygen: list(markdown = TRUE)
 RoxygenNote: 7.3.3
@@ -12,5 +12,6 @@ Imports:
     igraph,
     purrr,
     jsonlite,
-    utils,
     tibble
+Suggests:
+    dplyr

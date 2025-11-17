@@ -25,7 +25,7 @@ extract_applicants_table <- function(file_path, max_records = NULL) {
           tibble::tibble(
             lens_id = lens_id,
             sequence = i,
-            name = safe_extract(applicants[[i]], "extracted_name", "value"),
+            name = safe_extract(applicants[[i]]),
             residence = if(!is.null(applicants[[i]]$residence)) applicants[[i]]$residence else NA,
             address = if(!is.null(applicants[[i]]$extracted_address)) applicants[[i]]$extracted_address else NA
           )

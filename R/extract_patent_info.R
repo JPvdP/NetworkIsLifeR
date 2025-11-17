@@ -100,9 +100,9 @@ tibble::tibble(
   ipc_classifications = get_all_classifications(patent_json),
 
   # Legal status
-  patent_status = safe_extract(patent_json, "legal_status", "patent_status"),
-  granted = safe_extract(patent_json, "legal_status", "granted"),
-  grant_date = safe_extract(patent_json, "legal_status", "grant_date"),
+  patent_status = safe_extract(patent_json),
+  granted = safe_extract(patent_json),
+  grant_date = safe_extract(patent_json),
 
   # Citation count
   cited_by_count = {
@@ -111,7 +111,7 @@ tibble::tibble(
   },
 
   # Family size
-  simple_family_size = safe_extract(patent_json, "families", "simple_family", "size"),
-  extended_family_size = safe_extract(patent_json, "families", "extended_family", "size")
+  simple_family_size = safe_extract(patent_json),
+  extended_family_size = safe_extract(patent_json)
 )
 }

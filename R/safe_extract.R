@@ -2,7 +2,7 @@
 #'
 #' @keywords internal
 #' @noRd
-safe_extract_lens_pats <- function(obj, ...) {
+safe_extract <- function(obj, ...) {
 path <- list(...)
 result <- obj
 for (element in path) {
