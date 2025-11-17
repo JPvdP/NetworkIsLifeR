@@ -12,6 +12,13 @@ Imports:
     igraph,
     purrr,
     jsonlite,
-    tibble
+    tibble,
+    ggplot2,
+    uwot,
+    dbscan,
+    reticulate,
+    dplyr,
+    magrittr
 Suggests:
-    dplyr
+    readr
+
