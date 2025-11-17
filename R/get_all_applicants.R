@@ -6,7 +6,7 @@ get_all_applicants <- function(patent_json) {
   applicants <- patent_json$biblio$parties$applicants
   if (!is.null(applicants) && length(applicants) > 0) {
     names <- sapply(applicants, function(x) {
-      name <- safe_extract(x)
+      name <- safe_extract(x, "extracted_name", "value")
       if (is.na(name)) return(NA)
       return(name)
     })

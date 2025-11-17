@@ -25,7 +25,7 @@ purrr::map_dfr(lines, function(line) {
         tibble::tibble(
           lens_id = lens_id,
           sequence = if(!is.null(inventors[[i]]$sequence)) inventors[[i]]$sequence else i,
-          name = safe_extract(inventors[[i]]),
+          name = safe_extract(inventors[[i]], "extracted_name", "value"),
           residence = if(!is.null(inventors[[i]]$residence)) inventors[[i]]$residence else NA
         )
       })
