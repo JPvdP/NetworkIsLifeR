@@ -26,7 +26,7 @@
 #'
 #' # Take a subset (e.g. first 300 lines)
 #' texts <- texts[1:300]
-#' plop <- identify_topics(texts)
+#' #plop <- identify_topics(texts)
 #' @return A dataframe with doc_id, text, and cluster assignments.
 #' @export
 identify_topics <- function(

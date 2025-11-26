@@ -44,5 +44,5 @@ texts <- texts[texts != ""]
 
 # Take a subset (e.g. first 300 lines)
 texts <- texts[1:300]
-plop <- identify_topics(texts)
+#plop <- identify_topics(texts)
 }
