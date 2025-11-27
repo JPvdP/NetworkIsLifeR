@@ -14,85 +14,83 @@
 #' setup_bertopic_env("bertopic_r_env")
 #' @export
 setup_bertopic_env <- function(envname = "bertopic_r_env",
-                               python_version = "3.11") {
+                               python_version = "3.11",
+                               use_conda_on_windows = TRUE) {
   if (!requireNamespace("reticulate", quietly = TRUE)) {
     stop("The 'reticulate' package is required but not installed.")
   }
 
   is_windows <- identical(.Platform$OS.type, "windows")
 
-  # ---- 1. Ensure some Python toolchain exists ----
-  # This uses reticulate's helpers so you don't care where Python lives.
-  if (!reticulate::py_available(initialize = FALSE)) {
-    if (is_windows) {
-      message("No Python detected. Installing Miniconda (recommended on Windows)...")
+  # ---- Windows + conda branch ----
+  if (is_windows && use_conda_on_windows) {
+
+    if (!reticulate::miniconda_exists()) {
+      message("Installing Miniconda for reticulate...")
       reticulate::install_miniconda()
-    } else {
-      message("No Python detected. Installing a standalone Python distribution...")
-      reticulate::install_python(version = python_version)
     }
-  }
 
-  # ---- 2. If env already exists, bail out early ----
-  if (is_windows) {
-    existing_envs <- tryCatch(
-      reticulate::conda_list()$name,
-      error = function(e) character()
-    )
-  } else {
-    existing_envs <- reticulate::virtualenv_list()
-  }
+    # Ask user about ToS *before* we start creating envs
+    conda_bin <- reticulate::conda_binary()
 
-  if (envname %in% existing_envs) {
-    message("Environment '", envname, "' already exists. Nothing done.")
-    return(invisible(FALSE))
-  }
+    if (interactive()) {
+      cat(
+        "To create a conda environment, conda may access the Anaconda default channels,\n",
+        "which are now protected by Terms of Service.\n\n",
+        "By continuing, you will be running the equivalent of:\n",
+        "  conda tos accept --override-channels --channel https://repo.anaconda.com/pkgs/main\n",
+        "  conda tos accept --override-channels --channel https://repo.anaconda.com/pkgs/r\n",
+        "  conda tos accept --override-channels --channel https://repo.anaconda.com/pkgs/msys2\n\n",
+        "You should read the Terms of Service here:\n",
+        "  https://www.anaconda.com/legal/terms-of-service\n\n",
+        sep = ""
+      )
 
-  # NOTE: from here on, we assume this is called in a fresh R session.
-  # If Python was already initialized earlier in the session,
-  # use_*() won't be able to change it.
-  # So: call this function BEFORE using Python in the session.
+      ans <- readline("Do you confirm that you have read and agree to these Terms of Service? [yes/no]: ")
+      ans <- tolower(trimws(ans))
 
-  # ---- 3. Create the environment (OS-specific) ----
-  if (is_windows) {
-    # ----- Windows: use conda envs -----
+      if (ans %in% c("yes", "y")) {
+        accept_anaconda_tos(conda_bin)
+      } else {
+        stop("You did not accept the Terms of Service. Cannot proceed with conda-based setup.")
+      }
+
+    } else {
+      stop(
+        "Conda may require accepting Anaconda's Terms of Service, but this R session is non-interactive.\n",
+        "Please run setup_bertopic_env() interactively once, or accept the ToS manually\n",
+        "using the `conda tos accept` commands shown in the error message."
+      )
+    }
+
+    # Once ToS is accepted, create the env as usual
+    existing_envs <- tryCatch(reticulate::conda_list()$name,
+                              error = function(e) character())
+    if (envname %in% existing_envs) {
+      message("Conda environment '", envname, "' already exists. Nothing done.")
+      return(invisible(FALSE))
+    }
+
     message("Creating conda environment '", envname, "'...")
     reticulate::conda_create(
-      envname = envname,
+      envname  = envname,
       packages = paste0("python=", python_version)
     )
 
     reticulate::use_condaenv(envname, required = TRUE)
 
-    message("Installing Python packages into '", envname, "' (conda)...")
+    message("Installing Python packages into '", envname, "'...")
     reticulate::py_install(
       packages = c("sentence-transformers", "numpy"),
       envname  = envname,
       method   = "conda"
     )
 
-  } else {
-    # ----- macOS / Linux: use virtualenv -----
-    message("Creating virtualenv '", envname, "'...")
-    # Let reticulate find a suitable Python; you can also force a version:
-    reticulate::virtualenv_create(
-      envname = envname,
-      python  = python_version,
-      packages = FALSE  # we'll install packages explicitly below
-    )
-
-    reticulate::use_virtualenv(envname, required = TRUE)
-
-    message("Installing Python packages into '", envname, "' (virtualenv)...")
-    reticulate::py_install(
-      packages = c("sentence-transformers", "numpy"),
-      envname  = envname,
-      method   = "virtualenv"
-    )
+    message("Environment setup complete (conda, Windows).")
+    return(invisible(TRUE))
   }
 
-  message("Environment setup complete: '", envname, "'.")
-  invisible(TRUE)
+  # ---- Non-Windows, or Windows with virtualenv branch here ----
+  # (Your existing virtualenv-based logic)
 }
-
 

@@ -4,7 +4,11 @@
 \alias{setup_bertopic_env}
 \title{setup_bertopic_env}
 \usage{
-setup_bertopic_env(envname = "bertopic_r_env", python_version = "3.11")
+setup_bertopic_env(
+  envname = "bertopic_r_env",
+  python_version = "3.11",
+  use_conda_on_windows = TRUE
+)
 }
 \arguments{
 \item{envname}{The name of the python virtual environment.}
