@@ -30,14 +30,25 @@ setup_bertopic_env <- function(envname = "bertopic_r_env",
       reticulate::install_miniconda()
     }
 
-    # Ask user about ToS *before* we start creating envs
     conda_bin <- reticulate::conda_binary()
+    if (is.null(conda_bin) || !nzchar(conda_bin)) {
+      stop("Could not find Miniconda / conda binary even after install.")
+    }
+
+    existing_envs <- tryCatch(
+      reticulate::conda_list()$name,
+      error = function(e) character()
+    )
+    if (envname %in% existing_envs) {
+      message("Conda environment '", envname, "' already exists. Nothing done.")
+      return(invisible(FALSE))
+    }
 
     if (interactive()) {
       cat(
-        "To create a conda environment, conda may access the Anaconda default channels,\n",
-        "which are now protected by Terms of Service.\n\n",
-        "By continuing, you will be running the equivalent of:\n",
+        "To create a conda environment, conda may use the Anaconda default channels,\n",
+        "which are protected by Terms of Service.\n\n",
+        "By confirming below, this function will run the equivalent of:\n",
         "  conda tos accept --override-channels --channel https://repo.anaconda.com/pkgs/main\n",
         "  conda tos accept --override-channels --channel https://repo.anaconda.com/pkgs/r\n",
         "  conda tos accept --override-channels --channel https://repo.anaconda.com/pkgs/msys2\n\n",
@@ -59,16 +70,8 @@ setup_bertopic_env <- function(envname = "bertopic_r_env",
       stop(
         "Conda may require accepting Anaconda's Terms of Service, but this R session is non-interactive.\n",
         "Please run setup_bertopic_env() interactively once, or accept the ToS manually\n",
-        "using the `conda tos accept` commands shown in the error message."
+        "using the `conda tos accept` commands suggested by conda."
       )
-    }
-
-    # Once ToS is accepted, create the env as usual
-    existing_envs <- tryCatch(reticulate::conda_list()$name,
-                              error = function(e) character())
-    if (envname %in% existing_envs) {
-      message("Conda environment '", envname, "' already exists. Nothing done.")
-      return(invisible(FALSE))
     }
 
     message("Creating conda environment '", envname, "'...")
@@ -79,7 +82,7 @@ setup_bertopic_env <- function(envname = "bertopic_r_env",
 
     reticulate::use_condaenv(envname, required = TRUE)
 
-    message("Installing Python packages into '", envname, "'...")
+    message("Installing Python packages into '", envname, "' (conda)...")
     reticulate::py_install(
       packages = c("sentence-transformers", "numpy"),
       envname  = envname,
@@ -90,7 +93,34 @@ setup_bertopic_env <- function(envname = "bertopic_r_env",
     return(invisible(TRUE))
   }
 
-  # ---- Non-Windows, or Windows with virtualenv branch here ----
-  # (Your existing virtualenv-based logic)
+  # ---- virtualenv branch (macOS / Linux / Windows if use_conda_on_windows = FALSE) ----
+
+  if (!reticulate::py_available(initialize = FALSE)) {
+    message("No Python detected by reticulate. Installing Python ", python_version, " ...")
+    reticulate::install_python(python_version)
+  }
+
+  existing_envs <- reticulate::virtualenv_list()
+  if (envname %in% existing_envs) {
+    message("Virtual environment '", envname, "' already exists. Nothing done.")
+    return(invisible(FALSE))
+  }
+
+  message("Creating virtualenv '", envname, "'...")
+  reticulate::virtualenv_create(envname = envname)
+
+  reticulate::use_virtualenv(envname, required = TRUE)
+
+  message("Installing Python packages into '", envname, "' (virtualenv)...")
+  reticulate::py_install(
+    packages = c("sentence-transformers", "numpy"),
+    envname  = envname,
+    method   = "virtualenv"
+  )
+
+  message("Environment setup complete (virtualenv).")
+  invisible(TRUE)
 }
+
+
 
