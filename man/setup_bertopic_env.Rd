@@ -11,10 +11,12 @@ setup_bertopic_env(
 )
 }
 \arguments{
-\item{envname}{The name of the python virtual environment.}
-}
-\value{
-Creates a virtual environment and installs the required python-base.
+\item{envname}{Name of the environment.}
+
+\item{python_version}{Python version to install/use (default "3.11").}
+
+\item{use_conda_on_windows}{Logical; if TRUE on Windows use conda+Miniconda,
+otherwise fall back to virtualenv.}
 }
 \description{
 This function checks for a working Python installation and installs one
@@ -24,7 +26,4 @@ environment and installs the Python packages required for using
 safely without making changes. This ensures that all Python
 dependencies needed by \code{bertopicR} are available and isolated in a
 controlled environment.
-}
-\examples{
-setup_bertopic_env("bertopic_r_env")
 }

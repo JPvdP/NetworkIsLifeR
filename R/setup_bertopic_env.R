@@ -7,11 +7,10 @@
 #' safely without making changes. This ensures that all Python
 #' dependencies needed by `bertopicR` are available and isolated in a
 #' controlled environment.
-#'
-#' @param envname The name of the python virtual environment.
-#' @return Creates a virtual environment and installs the required python-base.
-#' @examples
-#' setup_bertopic_env("bertopic_r_env")
+#' @param envname Name of the environment.
+#' @param python_version Python version to install/use (default "3.11").
+#' @param use_conda_on_windows Logical; if TRUE on Windows use conda+Miniconda,
+#'   otherwise fall back to virtualenv.
 #' @export
 setup_bertopic_env <- function(envname = "bertopic_r_env",
                                python_version = "3.11",
@@ -22,19 +21,32 @@ setup_bertopic_env <- function(envname = "bertopic_r_env",
 
   is_windows <- identical(.Platform$OS.type, "windows")
 
-  # ---- Windows + conda branch ----
+  # -------------------------------------------------------------------
+  # WINDOWS + conda branch
+  # -------------------------------------------------------------------
   if (is_windows && use_conda_on_windows) {
 
-    if (!reticulate::miniconda_exists()) {
-      message("Installing Miniconda for reticulate...")
+    # 1) Check if we already have a conda binary; if not, install Miniconda
+    conda_bin <- tryCatch(
+      reticulate::conda_binary(),
+      error = function(e) ""
+    )
+
+    if (!nzchar(conda_bin)) {
+      message("No conda found. Installing Miniconda for reticulate...")
       reticulate::install_miniconda()
+
+      # Re-resolve the conda binary after install
+      conda_bin <- tryCatch(
+        reticulate::conda_binary(),
+        error = function(e) ""
+      )
+      if (!nzchar(conda_bin)) {
+        stop("Could not find Miniconda / conda binary even after install.")
+      }
     }
 
-    conda_bin <- reticulate::conda_binary()
-    if (is.null(conda_bin) || !nzchar(conda_bin)) {
-      stop("Could not find Miniconda / conda binary even after install.")
-    }
-
+    # 2) If env already exists, bail out
     existing_envs <- tryCatch(
       reticulate::conda_list()$name,
       error = function(e) character()
@@ -44,6 +56,7 @@ setup_bertopic_env <- function(envname = "bertopic_r_env",
       return(invisible(FALSE))
     }
 
+    # 3) Interactive ToS prompt for Anaconda channels
     if (interactive()) {
       cat(
         "To create a conda environment, conda may use the Anaconda default channels,\n",
@@ -61,6 +74,7 @@ setup_bertopic_env <- function(envname = "bertopic_r_env",
       ans <- tolower(trimws(ans))
 
       if (ans %in% c("yes", "y")) {
+        # <- this is your internal helper
         accept_anaconda_tos(conda_bin)
       } else {
         stop("You did not accept the Terms of Service. Cannot proceed with conda-based setup.")
@@ -74,6 +88,7 @@ setup_bertopic_env <- function(envname = "bertopic_r_env",
       )
     }
 
+    # 4) Create the conda env
     message("Creating conda environment '", envname, "'...")
     reticulate::conda_create(
       envname  = envname,
@@ -93,24 +108,31 @@ setup_bertopic_env <- function(envname = "bertopic_r_env",
     return(invisible(TRUE))
   }
 
-  # ---- virtualenv branch (macOS / Linux / Windows if use_conda_on_windows = FALSE) ----
+  # -------------------------------------------------------------------
+  # macOS / Linux / (Windows with use_conda_on_windows = FALSE)
+  # virtualenv-based branch
+  # -------------------------------------------------------------------
 
+  # 1) Ensure some Python exists (standalone or system)
   if (!reticulate::py_available(initialize = FALSE)) {
     message("No Python detected by reticulate. Installing Python ", python_version, " ...")
     reticulate::install_python(python_version)
   }
 
+  # 2) If virtualenv already exists, bail out
   existing_envs <- reticulate::virtualenv_list()
   if (envname %in% existing_envs) {
     message("Virtual environment '", envname, "' already exists. Nothing done.")
     return(invisible(FALSE))
   }
 
+  # 3) Create virtualenv
   message("Creating virtualenv '", envname, "'...")
   reticulate::virtualenv_create(envname = envname)
 
   reticulate::use_virtualenv(envname, required = TRUE)
 
+  # 4) Install packages
   message("Installing Python packages into '", envname, "' (virtualenv)...")
   reticulate::py_install(
     packages = c("sentence-transformers", "numpy"),
@@ -121,6 +143,3 @@ setup_bertopic_env <- function(envname = "bertopic_r_env",
   message("Environment setup complete (virtualenv).")
   invisible(TRUE)
 }
-
-
-
