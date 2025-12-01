@@ -4,10 +4,9 @@
 \alias{accept_anaconda_tos}
 \title{accept_anaconda_tos}
 \usage{
-accept_anaconda_tos(conda_bin = NULL)
+accept_anaconda_tos()
 }
 \description{
-Reorder factor levels within each topic panel.
-Based on tidytext's reorder_within().
+accept_anaconda_tos
 }
 \keyword{internal}
