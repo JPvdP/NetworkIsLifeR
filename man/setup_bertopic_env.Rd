@@ -48,4 +48,10 @@ safely without making changes. This ensures that all Python
 dependencies needed by \code{bertopicR} are available and isolated in a
 controlled environment.
 }
+\examples{
+\dontrun{
+# This function installs python, so we wrap it in a don't run
+setup_bertopic_env("bertopic_r_env", python_version = "3.11", use_conda_on_windows = TRUE)
+}
+}
 \keyword{internal}

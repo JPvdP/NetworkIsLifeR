@@ -17,6 +17,13 @@
 #'   topic, term, tf, tf_norm, tf_idf, c_tf_idf, lift, df_corpus,
 #'   tf_corpus, total_tf_topic, n_topics_with_term.
 #'
+#' @examples
+#' \dontrun{
+#' udpipe::udpipe_download_model('english')
+#' model <- udpipe::udpipe_load_model()
+#' compute_topic_terms_udpipe(df, ud_model = model)
+#' }
+## End(**Not run**)
 #' @export
 compute_topic_terms_udpipe <- function(
     data,

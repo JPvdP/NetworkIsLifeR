@@ -46,3 +46,10 @@ tf_corpus, total_tf_topic, n_topics_with_term.
 \description{
 Compute topic representation terms using udpipe + quanteda (R-only)
 }
+\examples{
+\dontrun{
+udpipe::udpipe_download_model('english')
+model <- udpipe::udpipe_load_model()
+compute_topic_terms_udpipe(df, ud_model = model)
+}
+}

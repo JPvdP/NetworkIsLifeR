@@ -11,6 +11,11 @@
 #' @param python_version Python version to install/use (default "3.11").
 #' @param use_conda_on_windows Logical; if TRUE on Windows use conda+Miniconda,
 #'   otherwise fall back to virtualenv.
+#' @examples
+#' \dontrun{
+#' # This function installs python, so we wrap it in a don't run
+#' setup_bertopic_env("bertopic_r_env", python_version = "3.11", use_conda_on_windows = TRUE)
+#' }
 #' @export
 setup_bertopic_env <- function(envname = "bertopic_r_env",
                                python_version = "3.11",
