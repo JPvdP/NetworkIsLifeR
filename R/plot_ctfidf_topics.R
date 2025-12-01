@@ -16,7 +16,6 @@
 #'   per topic. If \code{FALSE}, topics are plotted together. Default is FALSE.
 #'
 #' @return A ggplot2 object.
-#' @export
 #'
 #' @examples
 #' \dontrun{
@@ -24,6 +23,7 @@
 #' plot_ctfidf_topics(ctfidf_df, topics = 1, n_words = 10)
 #' plot_ctfidf_topics(ctfidf_df, facet = TRUE)
 #' }
+#' @export
 plot_ctfidf_topics <- function(
     ctfidf_df,
     topics = NULL,

@@ -17,6 +17,7 @@
 #'   topic, term, tf, tf_norm, tf_idf, c_tf_idf, lift, df_corpus,
 #'   tf_corpus, total_tf_topic, n_topics_with_term.
 #'
+#' @export
 compute_topic_terms_udpipe <- function(
     data,
     doc_col,

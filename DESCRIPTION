@@ -18,6 +18,8 @@ Imports:
     dbscan,
     reticulate,
     dplyr,
-    magrittr
+    magrittr,
+    udpipe,
+    quanteda
 Suggests:
     readr
