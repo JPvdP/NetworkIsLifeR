@@ -12,147 +12,134 @@
 #'
 #' @return Invisibly TRUE on success, otherwise stops with an error.
 #' @keywords internal
-setup_bertopic_env <- function(envname = "bertopic_r_env",
-                               python_version = "3.11",
-                               use_conda_on_windows = TRUE) {
+ensure_bertopic_env <- function(
+    envname = "bertopic_env",
+    required_modules = c("numpy", "sentence_transformers"),
+    verbose = TRUE
+) {
   if (!requireNamespace("reticulate", quietly = TRUE)) {
-    stop("The 'reticulate' package is required but not installed.")
+    stop("The 'reticulate' package is required but not installed.", call. = FALSE)
   }
 
-  is_windows <- identical(.Platform$OS.type, "windows")
+  # ---------------------------------------------------------------------------
+  # 1. Find env: conda or virtualenv?
+  # ---------------------------------------------------------------------------
+  env_type <- NULL
 
-  # Helper: find a system Python on non-Windows
-  find_system_python <- function() {
-    for (exe in c("python3", "python")) {
-      p <- Sys.which(exe)
-      if (nzchar(p)) return(unname(p))
-    }
-    ""
+  # Try conda environments
+  conda_envs <- character()
+  conda_envs <- tryCatch(
+    {
+      ce <- reticulate::conda_list()
+      if (!is.null(ce$name)) ce$name else character()
+    },
+    error = function(e) character()
+  )
+
+  if (envname %in% conda_envs) {
+    env_type <- "conda"
   }
 
-  ## ------------------------------------------------------------------
-  ## WINDOWS: use conda / Miniconda
-  ## ------------------------------------------------------------------
-  if (is_windows && use_conda_on_windows) {
-
-    # 1) Find or install Miniconda
-    conda_bin <- tryCatch(
-      reticulate::conda_binary(),
-      error = function(e) ""
-    )
-
-    if (!nzchar(conda_bin)) {
-      message("No conda found. Installing Miniconda for reticulate...")
-      reticulate::install_miniconda()
-
-      conda_bin <- tryCatch(
-        reticulate::conda_binary(),
-        error = function(e) ""
-      )
-      if (!nzchar(conda_bin)) {
-        stop("Could not find Miniconda / conda binary even after install.")
-      }
-    }
-
-    # 2) Create env if needed
-    existing_envs <- tryCatch(
-      reticulate::conda_list()$name,
-      error = function(e) character()
-    )
-
-    if (!(envname %in% existing_envs)) {
-      if (interactive()) {
-        cat(
-          "To create a conda environment, conda may use the Anaconda default channels,\n",
-          "which are protected by Terms of Service:\n",
-          "  https://www.anaconda.com/legal/terms-of-service\n\n",
-          "By confirming below, you indicate that you have read and agree to these terms.\n\n",
-          sep = ""
-        )
-        ans <- readline("Do you confirm that you have read and agree to these Terms of Service? [yes/no]: ")
-        ans <- tolower(trimws(ans))
-        if (!ans %in% c("yes", "y")) {
-          stop("You did not accept the Terms of Service. Cannot proceed with conda-based setup.")
-        }
-        # Let the ToS plugin auto-accept in this session
-        Sys.setenv(CONDA_PLUGINS_AUTO_ACCEPT_TOS = "yes")
-      } else {
-        stop(
-          "Conda may require accepting Anaconda's Terms of Service, but this R session is non-interactive.\n",
-          "Please run setup_bertopic_env() interactively once, or accept the ToS manually."
-        )
-      }
-
-      message("Creating conda environment '", envname,
-              "' with Python ", python_version, " ...")
-      reticulate::conda_create(
-        envname  = envname,
-        packages = paste0("python=", python_version)
-        # optionally: channel = "conda-forge"
-      )
-    } else {
-      message("Conda environment '", envname, "' already exists.")
-    }
-
-    # 3) Use that env in this R session
-    reticulate::use_condaenv(envname, required = TRUE)
-
-    # 4) Install required Python packages
-    message("Installing Python packages into '", envname, "' (conda)...")
-    reticulate::py_install(
-      packages = c("sentence-transformers", "numpy"),
-      envname  = envname,
-      method   = "conda"
-    )
-
-    # Optionally store for later use in other functions
-    options(bertopic_r.env = list(type = "conda", name = envname))
-
-    message("Environment setup complete (conda, Windows).")
-    return(invisible(TRUE))
-  }
-
-  ## ------------------------------------------------------------------
-  ## macOS / Linux / Windows without conda: virtualenv
-  ## ------------------------------------------------------------------
-
-  py_exec <- find_system_python()
-
-  if (!nzchar(py_exec)) {
-    stop(
-      "No Python executable ('python3' or 'python') found on PATH.\n",
-      "Please install Python ", python_version,
-      " (e.g., from python.org, Homebrew, or your package manager),\n",
-      "then run setup_bertopic_env() again."
-    )
-  }
-
-  existing_envs <- tryCatch(
+  # Try virtualenv environments
+  venvs <- character()
+  venvs <- tryCatch(
     reticulate::virtualenv_list(),
     error = function(e) character()
   )
 
-  if (!(envname %in% existing_envs)) {
-    message("Creating virtualenv '", envname,
-            "' using Python at:\n  ", py_exec)
-    reticulate::virtualenv_create(envname = envname, python = py_exec)
-  } else {
-    message("Virtual environment '", envname, "' already exists.")
+  if (envname %in% venvs) {
+    if (!is.null(env_type) && env_type == "conda") {
+      warning(
+        "Environment '", envname,
+        "' exists as both a conda env and a virtualenv. Using the conda env."
+      )
+    } else {
+      env_type <- "virtualenv"
+    }
   }
 
-  # Use this env in the current R session
-  reticulate::use_virtualenv(envname, required = TRUE)
+  if (is.null(env_type)) {
+    stop(
+      "Python environment '", envname, "' not found in conda or virtualenv.\n",
+      "Create it first with your install function.",
+      call. = FALSE
+    )
+  }
 
-  # Install required packages
-  message("Installing Python packages into '", envname, "' (virtualenv)...")
-  reticulate::py_install(
-    packages = c("sentence-transformers", "numpy"),
-    envname  = envname,
-    method   = "virtualenv"
-  )
+  if (verbose) {
+    message("Using ", env_type, " environment: '", envname, "'.")
+  }
 
-  options(bertopic_r.env = list(type = "virtualenv", name = envname))
+  # ---------------------------------------------------------------------------
+  # 2. Activate env BEFORE any Python initialization
+  # ---------------------------------------------------------------------------
+  if (env_type == "conda") {
+    reticulate::use_condaenv(envname, required = TRUE)
+  } else {
+    reticulate::use_virtualenv(envname, required = TRUE)
+  }
 
-  message("Environment setup complete (virtualenv).")
+  # Optional safety: if Python is already initialized with another env
+  if (reticulate::py_available(initialize = FALSE)) {
+    cfg <- reticulate::py_config()
+    if (verbose) {
+      message("Python already initialized at: ", cfg$python)
+    }
+    # You *could* stop here if it's not the env you expect, but reticulate
+    # should respect use_* calls made before the first py_* call.
+  }
+
+  # ---------------------------------------------------------------------------
+  # 3. Check & install required Python modules
+  # ---------------------------------------------------------------------------
+  # mapping from Python import name -> pip/conda package name
+  module_to_package <- function(mod) {
+    switch(
+      mod,
+      "sentence_transformers" = "sentence-transformers",
+      mod  # default: same name
+    )
+  }
+
+  # helper to install a package into the correct env
+  install_python_pkg <- function(package_name) {
+    if (env_type == "conda") {
+      # Using pip within the conda env is safest for sentence-transformers.
+      reticulate::conda_install(
+        envname,
+        packages = package_name,
+        pip = TRUE
+      )
+    } else {
+      reticulate::virtualenv_install(
+        envname,
+        packages = package_name
+      )
+    }
+  }
+
+  for (mod in required_modules) {
+    if (!reticulate::py_module_available(mod)) {
+      pkg <- module_to_package(mod)
+      if (verbose) {
+        message("Python module '", mod, "' not available. Installing '", pkg, "'...")
+      }
+      install_python_pkg(pkg)
+
+      # re-check after install
+      if (!reticulate::py_module_available(mod)) {
+        stop(
+          "Failed to import Python module '", mod, "' after installing package '",
+          pkg, "'. Check your Python environment and installation logs.",
+          call. = FALSE
+        )
+      } else if (verbose) {
+        message("Successfully installed and loaded module '", mod, "'.")
+      }
+    } else if (verbose) {
+      message("Python module '", mod, "' is already available.")
+    }
+  }
+
   invisible(TRUE)
 }

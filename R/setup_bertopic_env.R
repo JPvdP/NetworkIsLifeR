@@ -1,4 +1,4 @@
-#' setup_bertopic_env
+#' Setup an Python environment for Bertopic
 #'
 #' This function checks for a working Python installation and installs one
 #' if none is available. It then creates a dedicated Python virtual
@@ -7,15 +7,22 @@
 #' safely without making changes. This ensures that all Python
 #' dependencies needed by `bertopicR` are available and isolated in a
 #' controlled environment.
+#'
 #' @param envname Name of the environment.
 #' @param python_version Python version to install/use (default "3.11").
 #' @param use_conda_on_windows Logical; if TRUE on Windows use conda+Miniconda,
 #'   otherwise fall back to virtualenv.
+#' @details
+#' This function installs a python environment if non has been found.
+#'
+#' @return Invisible. Will install a python environment with numpy & Sentence-Transformers
+#'
 #' @examples
 #' \dontrun{
 #' # This function installs python, so we wrap it in a don't run
-#' setup_bertopic_env("bertopic_r_env", python_version = "3.11", use_conda_on_windows = TRUE)
+#' setup_bertopic_env(envname = "bertopic_r_env", python_version = "3.11", use_conda_on_windows = TRUE)
 #' }
+#'
 #' @export
 setup_bertopic_env <- function(envname = "bertopic_r_env",
                                python_version = "3.11",
