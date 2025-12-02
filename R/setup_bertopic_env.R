@@ -111,7 +111,7 @@ setup_bertopic_env <- function(envname = "bertopic_r_env",
 
     message("Installing Python packages into '", envname, "' (conda)...")
     reticulate::py_install(
-      packages = c("sentence-transformers", "numpy"),
+      packages = c("sentence-transformers", "numpy", "spacy"),
       envname  = envname,
       method   = "conda"
       # option: channel = "conda-forge", additional_install_args = "--override-channels"
