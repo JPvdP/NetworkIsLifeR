@@ -144,7 +144,7 @@ setup_bertopic_env <- function(envname = "bertopic_r_env",
 
   message("Installing Python packages into '", envname, "' (virtualenv)...")
   reticulate::py_install(
-    packages = c("sentence-transformers", "numpy"),
+    packages = c("sentence-transformers", "numpy", "spacy"),
     envname  = envname,
     method   = "virtualenv"
   )
