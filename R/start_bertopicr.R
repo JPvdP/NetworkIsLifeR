@@ -91,42 +91,96 @@ start_bertopicr <- function(envname = "bertopic_r_env_spacy",
     return(invisible(FALSE))
   }
 
-  # 2) Get path to Python inside the virtualenv
-  py_path <- tryCatch(
-    reticulate::virtualenv_python(envname),
-    error = function(e) NULL
-  )
+  # Helper: try to resolve envname to a Python binary
+  resolve_python_path <- function(envname) {
+    py <- NULL
 
-  if (is.null(py_path) || !nzchar(py_path) || !file.exists(py_path)) {
-    stop(
-      "Could not find Python for virtualenv '", envname, "'.\n",
-      "Make sure the environment exists (e.g. run setup_bertopic_env() first)."
+    # Case A: envname looks like a path (contains / or \)
+    if (grepl("[/\\\\]", envname)) {
+      # 1) envname is already a python binary
+      if (file.exists(envname)) {
+        py <- normalizePath(envname)
+      } else {
+        # 2) env root: try Unix layout
+        cand_unix <- file.path(envname, "bin", "python")
+        # 3) env root: try Windows layout
+        cand_win  <- file.path(envname, "Scripts", "python.exe")
+
+        if (file.exists(cand_unix)) {
+          py <- normalizePath(cand_unix)
+        } else if (file.exists(cand_win)) {
+          py <- normalizePath(cand_win)
+        }
+      }
+      if (!is.null(py)) return(py)
+    }
+
+    # Case B: virtualenv by name
+    py <- tryCatch(
+      reticulate::virtualenv_python(envname),
+      error = function(e) NULL
     )
+    if (!is.null(py) && nzchar(py) && file.exists(py)) return(normalizePath(py))
+
+    # Case C: conda env by name
+    py <- tryCatch(
+      reticulate::conda_python(envname),
+      error = function(e) NULL
+    )
+    if (!is.null(py) && nzchar(py) && file.exists(py)) return(normalizePath(py))
+
+    # Nothing worked
+    NULL
   }
 
-  # 3) Tell reticulate/spacyr to use THIS Python
-  Sys.setenv(RETICULATE_PYTHON = py_path)
+  py_path <- resolve_python_path(envname)
 
-  if (verbose) {
-    message("Setting RETICULATE_PYTHON to:\n  ", py_path)
+  if (is.null(py_path)) {
+    # Give helpful diagnostics
+    ve <- tryCatch(reticulate::virtualenv_list(), error = function(e) NULL)
+    ce <- tryCatch(reticulate::conda_list(),       error = function(e) NULL)
+
+    msg <- paste0(
+      "Could not find a Python executable for '", envname, "'.\n",
+      "- If this is a virtualenv name, check it appears in reticulate::virtualenv_list().\n",
+      "- If this is a conda env name, check it appears in reticulate::conda_list().\n",
+      "- If this is a path, make sure it points to either the env root or the python binary.\n"
+    )
+
+    if (!is.null(ve)) {
+      msg <- paste0(
+        msg,
+        "\nVirtualenvs seen by reticulate::virtualenv_list():\n  ",
+        paste(ve, collapse = ", ")
+      )
+    }
+
+    if (!is.null(ce)) {
+      msg <- paste0(
+        msg,
+        "\nConda envs seen by reticulate::conda_list():\n  ",
+        paste(ce$name, collapse = ", ")
+      )
+    }
+
+    stop(msg, call. = FALSE)
   }
 
-  # 4) Initialize spaCy via spacyr (this will also initialize reticulate)
+  if (verbose) message("Using Python at: ", py_path)
+
+  # Attach Python
+  reticulate::use_python(py_path, required = TRUE)
+
+  # Optionally initialise spacy via spacyr (if you use it)
   if (initialize_spacy) {
     if (!requireNamespace("spacyr", quietly = TRUE)) {
-      if (verbose) {
-        message(
-          "Package 'spacyr' is not installed; skipping spaCy initialization.\n",
-          "Install it with install.packages('spacyr') if you need spaCy."
-        )
-      }
+      warning("spacyr not installed; skipping spacy initialization.")
     } else {
-      if (verbose) message("Initializing spaCy via spacyr ...")
-      spacyr::spacy_initialize(model = "en_core_web_sm")
-      if (verbose) {
-        cfg <- reticulate::py_config()
-        message("spaCy initialized. Using Python at: ", cfg$python)
-      }
+      spacyr::spacy_initialize(
+        python_executable = py_path,
+        refresh_settings  = TRUE
+      )
+      if (verbose) message("spaCy initialised via spacyr.")
     }
   }
 
