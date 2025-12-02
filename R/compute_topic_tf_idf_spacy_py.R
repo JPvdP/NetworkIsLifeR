@@ -153,6 +153,18 @@ compute_topic_tf_idf_spacy_py <- function(data,
       dplyr::filter(!topic %in% exclude_topics)
   }
 
+  # --- Build one pseudo-document per topic -----------------------------
+  # This is the key change: term extraction is done on per-topic corpora,
+  # i.e. on the subset of documents belonging to each topic.
+  df_topic <- df %>%
+    dplyr::group_by(topic) %>%
+    dplyr::summarise(
+      text = paste(text, collapse = "\n"),
+      .groups = "drop"
+    ) %>%
+    dplyr::mutate(doc_id = as.character(topic)) %>%
+    dplyr::select(doc_id, topic, text)
+
   # --- Define the Python helper function (always) ----------------------
   py_code <- "
 import spacy
@@ -220,10 +232,10 @@ def parse_for_topics(texts, doc_ids, topics, model,
 "
   reticulate::py_run_string(py_code, convert = FALSE)
 
-  # --- Call Python to parse texts --------------------------------------
-  texts   <- as.character(df$text)
-  doc_ids <- as.character(df$doc_id)
-  topics  <- df$topic
+  # --- Call Python to parse topic-level texts --------------------------
+  texts   <- as.character(df_topic$text)
+  doc_ids <- as.character(df_topic$doc_id)
+  topics  <- df_topic$topic
 
   res <- reticulate::py$parse_for_topics(
     texts,
@@ -243,6 +255,8 @@ def parse_for_topics(texts, doc_ids, topics, model,
       topic = character(),
       term  = character(),
       n     = integer(),
+      n_topics_with_term = integer(),
+      idf   = numeric(),
       tfidf = numeric(),
       rank  = integer()
     ))
@@ -266,54 +280,90 @@ def parse_for_topics(texts, doc_ids, topics, model,
       topic = character(),
       term  = character(),
       n     = integer(),
+      n_topics_with_term = integer(),
+      idf   = numeric(),
       tfidf = numeric(),
       rank  = integer()
     ))
   }
 
-  # --- Term counts per topic -------------------------------------------
-  term_counts <- tokens %>%
-    dplyr::count(topic, term, name = "n") %>%
-    dplyr::filter(n >= min_term_freq)
+  # --- Term counts per topic (full) ------------------------------------
+  term_counts_full <- tokens %>%
+    dplyr::count(topic, term, name = "n")
 
-  if (nrow(term_counts) == 0) {
-    warning("No terms meet the minimum within-topic frequency; try lowering 'min_term_freq'.")
+  if (nrow(term_counts_full) == 0) {
+    warning("No terms available to count; something went wrong after tokenisation.")
     return(tibble::tibble(
       topic = character(),
       term  = character(),
       n     = integer(),
+      n_topics_with_term = integer(),
+      idf   = numeric(),
       tfidf = numeric(),
       rank  = integer()
     ))
   }
 
   # --- Compute TF–IDF across topics ------------------------------------
+  n_topics <- dplyr::n_distinct(term_counts_full$topic)
+
+  df_term_topics <- term_counts_full %>%
+    dplyr::group_by(term) %>%
+    dplyr::summarise(
+      n_topics_with_term = dplyr::n(),
+      .groups = "drop"
+    )
+
+  term_scores_full <- term_counts_full %>%
+    dplyr::left_join(df_term_topics, by = "term")
+
   if (use_tfidf) {
-    n_topics <- dplyr::n_distinct(term_counts$topic)
-
-    df_term_topics <- term_counts %>%
-      dplyr::group_by(term) %>%
-      dplyr::summarise(
-        n_topics_with_term = dplyr::n(),
-        .groups = "drop"
-      )
-
-    term_scores <- term_counts %>%
-      dplyr::left_join(df_term_topics, by = "term") %>%
+    term_scores_full <- term_scores_full %>%
       dplyr::mutate(
         idf   = log((1 + n_topics) / (1 + n_topics_with_term)) + 1,
         tfidf = n * idf
       )
   } else {
-    term_scores <- term_counts %>%
-      dplyr::mutate(tfidf = as.numeric(n))
+    term_scores_full <- term_scores_full %>%
+      dplyr::mutate(
+        idf   = NA_real_,
+        tfidf = as.numeric(n)
+      )
   }
 
-  # --- Select top N terms per topic ------------------------------------
-  top_terms <- term_scores %>%
+  # --- Select top N terms per topic, with fallback ---------------------
+  # Primary: enforce min_term_freq within each topic
+  top_terms_primary <- term_scores_full %>%
+    dplyr::group_by(topic) %>%
+    dplyr::filter(n >= min_term_freq) %>%
+    dplyr::arrange(dplyr::desc(tfidf), dplyr::desc(n), .by_group = TRUE) %>%
+    dplyr::slice_head(n = top_n) %>%
+    dplyr::ungroup()
+
+  # Identify topics that would be empty after min_term_freq
+  topics_all      <- unique(term_scores_full$topic)
+  topics_with_any <- unique(top_terms_primary$topic)
+  topics_missing  <- setdiff(topics_all, topics_with_any)
+
+  # Fallback: for those topics, ignore min_term_freq and just take the best terms
+  fallback <- term_scores_full %>%
+    dplyr::filter(topic %in% topics_missing) %>%
     dplyr::group_by(topic) %>%
     dplyr::arrange(dplyr::desc(tfidf), dplyr::desc(n), .by_group = TRUE) %>%
     dplyr::slice_head(n = top_n) %>%
+    dplyr::ungroup()
+
+  if (length(topics_missing) > 0L) {
+    message(
+      "Some topics had no terms with n >= min_term_freq. ",
+      "For these topics, the threshold was relaxed and the best terms were used instead: ",
+      paste(topics_missing, collapse = ", ")
+    )
+  }
+
+  top_terms <- dplyr::bind_rows(top_terms_primary, fallback) %>%
+    dplyr::group_by(topic) %>%
+    dplyr::arrange(dplyr::desc(tfidf), dplyr::desc(n), .by_group = TRUE) %>%
     dplyr::mutate(rank = dplyr::row_number()) %>%
     dplyr::ungroup() %>%
     dplyr::arrange(topic, rank)
