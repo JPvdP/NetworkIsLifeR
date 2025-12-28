@@ -1,11 +1,27 @@
-#' Compute topic-level term scores using spaCy (Python)
+#' Compute topic-level salient terms using spaCy (Python) with per-document parsing
 #'
 #' This function takes a data frame with documents, their topic (cluster)
 #' assignments, and raw text, and computes term statistics per topic using a
-#' spaCy (Python) model. It tokenises the text, keeps only selected part-of-speech
-#' tags (e.g. nouns and proper nouns), optionally builds n-grams, filters
-#' short and infrequent terms, and computes term scores (TF or TF–IDF) per
-#' topic. The output is a tidy data frame with the top terms for each topic.
+#' spaCy (Python) language model. Unlike approaches that concatenate all texts
+#' within each topic into a single pseudo-document, this function processes text
+#' per document (streamed via \code{nlp.pipe()}) and aggregates term counts at the
+#' topic level. This design is more memory-efficient, avoids spaCy's maximum
+#' text-length constraint for large topics, and prevents n-grams spanning
+#' document boundaries.
+#'
+#' Tokenisation, POS-tagging, and lemmatisation are performed in Python via
+#' \pkg{reticulate}. Tokens are filtered to retain only selected spaCy POS tags
+#' (e.g. nouns and proper nouns), short tokens are removed, and optional n-grams
+#' are constructed over the retained lemma sequence within each document. The
+#' function then aggregates term frequencies per topic and computes either raw
+#' term frequency (TF) or a TF–IDF-like score across topics to highlight terms
+#' that are frequent within a topic but relatively rare in other topics.
+#'
+#' For efficiency, term counting is performed in Python and only aggregated
+#' (topic, term, frequency) results are returned to R. The output is a tidy data
+#' frame containing the top-ranking terms per topic, with a fallback mechanism
+#' that relaxes \code{min_term_freq} for topics that would otherwise return no
+#' terms.
 #'
 #' @param data A data frame (or tibble) containing at least the document
 #'   identifier, topic/cluster label, and text columns.
@@ -23,56 +39,60 @@
 #'   by spaCy, e.g. \code{"NOUN"}, \code{"PROPN"}) that should be retained
 #'   when computing term statistics. Tokens with other POS tags are discarded.
 #'   Default is \code{c("NOUN", "PROPN")}.
-#' @param min_char Integer; minimum number of characters a token must have
-#'   to be kept. Shorter tokens are discarded. Default is \code{3L}.
-#' @param min_term_freq Integer; minimum term frequency (across all
-#'   documents/topics) required for a term to be kept. Terms that occur fewer
-#'   times than this threshold are removed. Default is \code{2L}.
-#' @param top_n Integer; number of top-ranking terms to return per topic
-#'   after scoring (e.g. by TF–IDF). Default is \code{10L}.
-#' @param stopwords Optional character vector of stopwords to remove
-#'   before computing term statistics. If \code{NULL} (default), no
-#'   additional stopwords are removed apart from those filtered by
-#'   POS/length/frequency.
-#' @param use_tfidf Logical; if \code{TRUE} (default), compute TF–IDF
-#'   scores per topic. If \code{FALSE}, only term frequencies are computed
-#'   and returned.
+#' @param min_char Integer; minimum number of characters a (lemmatised) token
+#'   must have to be kept. Shorter tokens are discarded. Default is \code{3L}.
+#' @param min_term_freq Integer; minimum within-topic term frequency required for
+#'   a term to be eligible for the primary top-\code{n} selection. If a topic has
+#'   no terms meeting this threshold, a fallback step relaxes this constraint and
+#'   returns the best-scoring terms anyway. Default is \code{2L}.
+#' @param top_n Integer; number of top-ranking terms to return per topic after
+#'   scoring (by TF–IDF or TF). Default is \code{10L}.
+#' @param stopwords Optional character vector of stopwords to remove before
+#'   computing term statistics. Stopword matching is case-insensitive and applied
+#'   to the final term string (i.e. exact-match on unigrams or n-grams). If
+#'   \code{NULL} (default), no additional stopwords are removed.
+#' @param use_tfidf Logical; if \code{TRUE} (default), compute TF–IDF-like scores
+#'   per topic. If \code{FALSE}, only term frequencies are used for ranking.
 #' @param exclude_topics Optional vector of topic labels (values found in
-#'   \code{topic_col}) that should be excluded from the computation. If
-#'   \code{NULL} (default), all topics are included.
-#' @param min_ngram Integer; minimum n-gram size to construct from the
-#'   token sequence. Default is \code{1L} (unigrams).
-#' @param max_ngram Integer; maximum n-gram size to construct from the
-#'   token sequence. Must be greater than or equal to \code{min_ngram}.
-#'   Default is \code{1L} (no n-grams beyond unigrams).
-#' @param ngram_sep A single-character string used to join tokens when
-#'   forming n-grams. Default is a space (\code{" "}).
+#'   \code{topic_col}) that should be excluded from computation. If \code{NULL}
+#'   (default), all topics are included.
+#' @param min_ngram Integer; minimum n-gram size to construct from the retained
+#'   lemma sequence within each document. Default is \code{1L} (unigrams).
+#' @param max_ngram Integer; maximum n-gram size to construct from the retained
+#'   lemma sequence within each document. Must be greater than or equal to
+#'   \code{min_ngram}. Default is \code{1L} (no n-grams beyond unigrams).
+#' @param ngram_sep A single-character string used to join tokens when forming
+#'   n-grams. Default is a space (\code{" "}).
 #'
 #' @details
-#' Internally, this function relies on a Python spaCy pipeline (accessed
-#' via \pkg{reticulate}) to perform tokenisation and POS-tagging. Make sure
-#' that a suitable Python environment is available, spaCy is installed in
-#' that environment, and the specified \code{spacy_model} has been downloaded.
+#' Internally, this function relies on a Python spaCy pipeline (accessed via
+#' \pkg{reticulate}) to perform tokenisation, POS-tagging, and lemmatisation. For
+#' performance and memory efficiency, documents are processed using
+#' \code{nlp.pipe()} and term counts are aggregated in Python before being
+#' returned to R.
 #'
-#' The function aggregates terms at the topic level, filters them according
-#' to the length and frequency thresholds, optionally constructs n-grams, and
-#' then computes per-topic term scores. When \code{use_tfidf = TRUE}, a
-#' TF–IDF-like weighting is used to highlight terms that are frequent within
-#' a topic but relatively rare across other topics.
+#' The TF–IDF-like weighting is computed across topics. For each term, the
+#' document frequency is defined as the number of topics in which the term occurs
+#' at least once. The inverse document frequency is:
+#' \deqn{idf = log((1 + T)/(1 + df)) + 1}
+#' where \eqn{T} is the number of topics and \eqn{df} is the number of topics
+#' containing the term. Term scores are then \eqn{tfidf = tf * idf}, where
+#' \eqn{tf} is the within-topic term frequency.
 #'
-#' @return A tibble or data frame with one row per (topic, term) combination
-#'   and at least the following columns:
+#' @return A tibble with one row per (topic, term) combination in the top-\code{n}
+#'   list for each topic, with at least the following columns:
 #'   \itemize{
-#'     \item \code{topic} (or the values from \code{topic_col})
-#'     \item \code{term} (unigrams or n-grams)
-#'     \item term frequency and, if requested, TF–IDF score
-#'     \item a rank or ordering within each topic (if implemented)
+#'     \item \code{topic}: topic label (values from \code{topic_col})
+#'     \item \code{term}: unigram or n-gram term string (lemmatised, lowercased)
+#'     \item \code{n}: within-topic term frequency
+#'     \item \code{n_topics_with_term}: number of topics in which the term appears
+#'     \item \code{idf}: inverse document frequency across topics (if enabled)
+#'     \item \code{tfidf}: TF–IDF-like score used for ranking
+#'     \item \code{rank}: rank of the term within topic (1 = highest)
 #'   }
-#'   The exact column names may depend on the implementation.
 #'
 #' @examples
 #' \dontrun{
-#' # Minimal example
 #' library(tibble)
 #'
 #' toy_data <- tibble::tibble(
@@ -85,48 +105,48 @@
 #'   )
 #' )
 #'
+#' # Unigrams + bigrams, TF–IDF
 #' topic_terms <- compute_topic_tf_idf_spacy_py(
-#'   data       = toy_data,
-#'   doc_col    = "doc_id",
-#'   topic_col  = "cluster",
-#'   text_col   = "text",
+#'   data        = toy_data,
+#'   doc_col     = "doc_id",
+#'   topic_col   = "cluster",
+#'   text_col    = "text",
 #'   spacy_model = "en_core_web_sm",
 #'   pos_keep    = c("NOUN", "PROPN"),
 #'   min_ngram   = 1L,
 #'   max_ngram   = 2L,
 #'   top_n       = 5L
 #' )
+#'
+#' # TF only (no IDF weighting)
+#' topic_terms_tf <- compute_topic_tf_idf_spacy_py(
+#'   data       = toy_data,
+#'   use_tfidf  = FALSE,
+#'   top_n      = 5L
+#' )
 #' }
 #' @export
 compute_topic_tf_idf_spacy_py <- function(data,
-                                           doc_col        = "doc_id",
-                                           topic_col      = "cluster",
-                                           text_col       = "text",
-                                           spacy_model    = "en_core_web_sm",
-                                           pos_keep       = c("NOUN", "PROPN"),
-                                           min_char       = 3L,
-                                           min_term_freq  = 2L,
-                                           top_n          = 10L,
-                                           stopwords      = NULL,
-                                           use_tfidf      = TRUE,
-                                           exclude_topics = NULL,
-                                           min_ngram      = 1L,
-                                           max_ngram      = 1L,
-                                           ngram_sep      = " ") {
+                                          doc_col        = "doc_id",
+                                          topic_col      = "cluster",
+                                          text_col       = "text",
+                                          spacy_model    = "en_core_web_sm",
+                                          pos_keep       = c("NOUN", "PROPN"),
+                                          min_char       = 3L,
+                                          min_term_freq  = 2L,
+                                          top_n          = 10L,
+                                          stopwords      = NULL,
+                                          use_tfidf      = TRUE,
+                                          exclude_topics = NULL,
+                                          min_ngram      = 1L,
+                                          max_ngram      = 1L,
+                                          ngram_sep      = " ") {
 
   # --- Dependencies ----------------------------------------------------
-  if (!requireNamespace("reticulate", quietly = TRUE)) {
-    stop("The 'reticulate' package is required but not installed.")
-  }
-  if (!requireNamespace("dplyr", quietly = TRUE)) {
-    stop("The 'dplyr' package is required but not installed.")
-  }
-  if (!requireNamespace("tibble", quietly = TRUE)) {
-    stop("The 'tibble' package is required but not installed.")
-  }
-  if (!requireNamespace("rlang", quietly = TRUE)) {
-    stop("The 'rlang' package is required but not installed.")
-  }
+  if (!requireNamespace("reticulate", quietly = TRUE)) stop("The 'reticulate' package is required but not installed.")
+  if (!requireNamespace("dplyr", quietly = TRUE))      stop("The 'dplyr' package is required but not installed.")
+  if (!requireNamespace("tibble", quietly = TRUE))     stop("The 'tibble' package is required but not installed.")
+  if (!requireNamespace("rlang", quietly = TRUE))      stop("The 'rlang' package is required but not installed.")
 
   # Ensure Python is initialized in the correct env
   if (!reticulate::py_available(initialize = TRUE)) {
@@ -149,55 +169,79 @@ compute_topic_tf_idf_spacy_py <- function(data,
     )
 
   if (!is.null(exclude_topics)) {
-    df <- df %>%
-      dplyr::filter(!topic %in% exclude_topics)
+    df <- df %>% dplyr::filter(!topic %in% exclude_topics)
   }
 
-  # --- Build one pseudo-document per topic -----------------------------
-  # This is the key change: term extraction is done on per-topic corpora,
-  # i.e. on the subset of documents belonging to each topic.
-  df_topic <- df %>%
-    dplyr::group_by(topic) %>%
-    dplyr::summarise(
-      text = paste(text, collapse = "\n"),
-      .groups = "drop"
-    ) %>%
-    dplyr::mutate(doc_id = as.character(topic)) %>%
-    dplyr::select(doc_id, topic, text)
+  # Drop missing/empty texts early
+  df <- df %>%
+    dplyr::filter(!is.na(text), text != "")
 
-  # --- Define the Python helper function (always) ----------------------
+  if (nrow(df) == 0) {
+    warning("No documents to process after filtering.")
+    return(tibble::tibble(
+      topic = character(),
+      term  = character(),
+      n     = integer(),
+      n_topics_with_term = integer(),
+      idf   = numeric(),
+      tfidf = numeric(),
+      rank  = integer()
+    ))
+  }
+
+  # --- Define Python helper (count in Python; use nlp.pipe) -------------
   py_code <- "
 import spacy
 import spacy.cli
+from collections import Counter
 
 _nlp_cache = {}
 
-def _get_nlp(model):
+def _get_nlp(model, max_length_needed=None):
     if model not in _nlp_cache:
         try:
-            _nlp_cache[model] = spacy.load(model)
+            # We only need POS + lemma; disable heavy components for speed/memory
+            _nlp_cache[model] = spacy.load(model, exclude=['parser', 'ner', 'textcat'])
         except OSError:
-            # Model not installed: download and try again (first call only)
             spacy.cli.download(model)
-            _nlp_cache[model] = spacy.load(model)
-    return _nlp_cache[model]
+            _nlp_cache[model] = spacy.load(model, exclude=['parser', 'ner', 'textcat'])
 
-def parse_for_topics(texts, doc_ids, topics, model,
-                     pos_keep=('NOUN','PROPN'),
-                     min_char=3,
-                     min_ngram=1,
-                     max_ngram=1,
-                     sep=' '):
+    nlp = _nlp_cache[model]
 
-    nlp = _get_nlp(model)
-    results = []
+    # Safety: raise max_length if needed (should rarely be necessary per-document)
+    if max_length_needed is not None and max_length_needed > nlp.max_length:
+        nlp.max_length = int(max_length_needed)
 
-    for text, doc_id, topic in zip(texts, doc_ids, topics):
-        if text is None:
+    return nlp
+
+def parse_and_count_terms(texts, topics, model,
+                          pos_keep=('NOUN','PROPN'),
+                          min_char=3,
+                          min_ngram=1,
+                          max_ngram=1,
+                          sep=' ',
+                          batch_size=128):
+
+    # Determine max doc length to avoid E088 (per-doc should usually be below default)
+    max_len = 0
+    for t in texts:
+        if t is not None:
+            lt = len(t)
+            if lt > max_len:
+                max_len = lt
+
+    nlp = _get_nlp(model, max_length_needed=max_len + 1000)
+
+    # Count terms per topic efficiently
+    counts = Counter()
+
+    # Stream docs
+    for i, doc in enumerate(nlp.pipe(texts, batch_size=batch_size)):
+        topic = topics[i]
+        if doc is None:
             continue
-        doc = nlp(text)
 
-        # Collect lemmas of tokens we keep
+        # Collect lemmas we keep
         lemmas = []
         for token in doc:
             if token.pos_ not in pos_keep:
@@ -212,44 +256,43 @@ def parse_for_topics(texts, doc_ids, topics, model,
         if not lemmas:
             continue
 
-        # Generate n-grams on the lemma sequence
         L = len(lemmas)
         for n in range(min_ngram, max_ngram + 1):
-            if n <= 0:
+            if n <= 0 or L < n:
                 continue
-            if L < n:
-                continue
-            for i in range(L - n + 1):
-                term = sep.join(lemmas[i:i+n])
-                results.append({
-                    'doc_id': doc_id,
-                    'topic': topic,
-                    'term': term,
-                    'ngram_n': n
-                })
+            for j in range(L - n + 1):
+                term = sep.join(lemmas[j:j+n])
+                counts[(str(topic), term)] += 1
 
-    return results
+    # Convert to list-of-dicts for reticulate
+    out = []
+    for (topic, term), n in counts.items():
+        out.append({'topic': topic, 'term': term, 'n': int(n)})
+
+    return out
 "
   reticulate::py_run_string(py_code, convert = FALSE)
 
-  # --- Call Python to parse topic-level texts --------------------------
-  texts   <- as.character(df_topic$text)
-  doc_ids <- as.character(df_topic$doc_id)
-  topics  <- df_topic$topic
+  # --- Call Python ------------------------------------------------------
+  texts  <- as.character(df$text)
+  # Coerce topics to character for stable Python dict keys + later joins
+  topics <- as.character(df$topic)
 
-  res <- reticulate::py$parse_for_topics(
-    texts,
-    doc_ids,
-    topics,
-    spacy_model,
-    pos_keep,
-    as.integer(min_char),
-    as.integer(min_ngram),
-    as.integer(max_ngram),
-    ngram_sep
+  res <- reticulate::py$parse_and_count_terms(
+    texts   = texts,
+    topics  = topics,
+    model   = spacy_model,
+    pos_keep = pos_keep,
+    min_char = as.integer(min_char),
+    min_ngram = as.integer(min_ngram),
+    max_ngram = as.integer(max_ngram),
+    sep = ngram_sep,
+    batch_size = as.integer(128)
   )
 
-  if (length(res) == 0) {
+  res_r <- reticulate::py_to_r(res)
+
+  if (length(res_r) == 0) {
     warning("spaCy returned no tokens; check model, pos_keep, min_char, and n-gram settings.")
     return(tibble::tibble(
       topic = character(),
@@ -262,37 +305,23 @@ def parse_for_topics(texts, doc_ids, topics, model,
     ))
   }
 
-  tokens <- dplyr::bind_rows(res)  # list of dicts -> tibble
-
-  # --- Apply stopwords and other filters on the R side -----------------
-  tokens <- tokens %>%
+  term_counts_full <- dplyr::bind_rows(res_r) %>%
+    dplyr::mutate(
+      topic = as.character(topic),
+      term  = as.character(term),
+      n     = as.integer(n)
+    ) %>%
     dplyr::filter(!is.na(topic), !is.na(term), term != "")
 
+  # --- Stopwords (exact-match, as in your original design) --------------
   if (!is.null(stopwords)) {
     sw <- tolower(stopwords)
-    tokens <- tokens %>%
+    term_counts_full <- term_counts_full %>%
       dplyr::filter(!term %in% sw)
   }
 
-  if (nrow(tokens) == 0) {
-    warning("No tokens left after filtering; check stopwords / filters.")
-    return(tibble::tibble(
-      topic = character(),
-      term  = character(),
-      n     = integer(),
-      n_topics_with_term = integer(),
-      idf   = numeric(),
-      tfidf = numeric(),
-      rank  = integer()
-    ))
-  }
-
-  # --- Term counts per topic (full) ------------------------------------
-  term_counts_full <- tokens %>%
-    dplyr::count(topic, term, name = "n")
-
   if (nrow(term_counts_full) == 0) {
-    warning("No terms available to count; something went wrong after tokenisation.")
+    warning("No terms left after filtering; check stopwords / filters.")
     return(tibble::tibble(
       topic = character(),
       term  = character(),
@@ -332,7 +361,6 @@ def parse_for_topics(texts, doc_ids, topics, model,
   }
 
   # --- Select top N terms per topic, with fallback ---------------------
-  # Primary: enforce min_term_freq within each topic
   top_terms_primary <- term_scores_full %>%
     dplyr::group_by(topic) %>%
     dplyr::filter(n >= min_term_freq) %>%
@@ -340,12 +368,10 @@ def parse_for_topics(texts, doc_ids, topics, model,
     dplyr::slice_head(n = top_n) %>%
     dplyr::ungroup()
 
-  # Identify topics that would be empty after min_term_freq
   topics_all      <- unique(term_scores_full$topic)
   topics_with_any <- unique(top_terms_primary$topic)
   topics_missing  <- setdiff(topics_all, topics_with_any)
 
-  # Fallback: for those topics, ignore min_term_freq and just take the best terms
   fallback <- term_scores_full %>%
     dplyr::filter(topic %in% topics_missing) %>%
     dplyr::group_by(topic) %>%

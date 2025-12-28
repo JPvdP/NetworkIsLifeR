@@ -2,7 +2,7 @@
 % Please edit documentation in R/compute_topic_tf_idf_spacy_py.R
 \name{compute_topic_tf_idf_spacy_py}
 \alias{compute_topic_tf_idf_spacy_py}
-\title{Compute topic-level term scores using spaCy (Python)}
+\title{Compute topic-level salient terms using spaCy (Python) with per-document parsing}
 \usage{
 compute_topic_tf_idf_spacy_py(
   data,
@@ -45,73 +45,93 @@ by spaCy, e.g. \code{"NOUN"}, \code{"PROPN"}) that should be retained
 when computing term statistics. Tokens with other POS tags are discarded.
 Default is \code{c("NOUN", "PROPN")}.}
 
-\item{min_char}{Integer; minimum number of characters a token must have
-to be kept. Shorter tokens are discarded. Default is \code{3L}.}
+\item{min_char}{Integer; minimum number of characters a (lemmatised) token
+must have to be kept. Shorter tokens are discarded. Default is \code{3L}.}
 
-\item{min_term_freq}{Integer; minimum term frequency (across all
-documents/topics) required for a term to be kept. Terms that occur fewer
-times than this threshold are removed. Default is \code{2L}.}
+\item{min_term_freq}{Integer; minimum within-topic term frequency required for
+a term to be eligible for the primary top-\code{n} selection. If a topic has
+no terms meeting this threshold, a fallback step relaxes this constraint and
+returns the best-scoring terms anyway. Default is \code{2L}.}
 
-\item{top_n}{Integer; number of top-ranking terms to return per topic
-after scoring (e.g. by TF–IDF). Default is \code{10L}.}
+\item{top_n}{Integer; number of top-ranking terms to return per topic after
+scoring (by TF–IDF or TF). Default is \code{10L}.}
 
-\item{stopwords}{Optional character vector of stopwords to remove
-before computing term statistics. If \code{NULL} (default), no
-additional stopwords are removed apart from those filtered by
-POS/length/frequency.}
+\item{stopwords}{Optional character vector of stopwords to remove before
+computing term statistics. Stopword matching is case-insensitive and applied
+to the final term string (i.e. exact-match on unigrams or n-grams). If
+\code{NULL} (default), no additional stopwords are removed.}
 
-\item{use_tfidf}{Logical; if \code{TRUE} (default), compute TF–IDF
-scores per topic. If \code{FALSE}, only term frequencies are computed
-and returned.}
+\item{use_tfidf}{Logical; if \code{TRUE} (default), compute TF–IDF-like scores
+per topic. If \code{FALSE}, only term frequencies are used for ranking.}
 
 \item{exclude_topics}{Optional vector of topic labels (values found in
-\code{topic_col}) that should be excluded from the computation. If
-\code{NULL} (default), all topics are included.}
+\code{topic_col}) that should be excluded from computation. If \code{NULL}
+(default), all topics are included.}
 
-\item{min_ngram}{Integer; minimum n-gram size to construct from the
-token sequence. Default is \code{1L} (unigrams).}
+\item{min_ngram}{Integer; minimum n-gram size to construct from the retained
+lemma sequence within each document. Default is \code{1L} (unigrams).}
 
-\item{max_ngram}{Integer; maximum n-gram size to construct from the
-token sequence. Must be greater than or equal to \code{min_ngram}.
-Default is \code{1L} (no n-grams beyond unigrams).}
+\item{max_ngram}{Integer; maximum n-gram size to construct from the retained
+lemma sequence within each document. Must be greater than or equal to
+\code{min_ngram}. Default is \code{1L} (no n-grams beyond unigrams).}
 
-\item{ngram_sep}{A single-character string used to join tokens when
-forming n-grams. Default is a space (\code{" "}).}
+\item{ngram_sep}{A single-character string used to join tokens when forming
+n-grams. Default is a space (\code{" "}).}
 }
 \value{
-A tibble or data frame with one row per (topic, term) combination
-and at least the following columns:
+A tibble with one row per (topic, term) combination in the top-\code{n}
+list for each topic, with at least the following columns:
 \itemize{
-\item \code{topic} (or the values from \code{topic_col})
-\item \code{term} (unigrams or n-grams)
-\item term frequency and, if requested, TF–IDF score
-\item a rank or ordering within each topic (if implemented)
+\item \code{topic}: topic label (values from \code{topic_col})
+\item \code{term}: unigram or n-gram term string (lemmatised, lowercased)
+\item \code{n}: within-topic term frequency
+\item \code{n_topics_with_term}: number of topics in which the term appears
+\item \code{idf}: inverse document frequency across topics (if enabled)
+\item \code{tfidf}: TF–IDF-like score used for ranking
+\item \code{rank}: rank of the term within topic (1 = highest)
 }
-The exact column names may depend on the implementation.
 }
 \description{
 This function takes a data frame with documents, their topic (cluster)
 assignments, and raw text, and computes term statistics per topic using a
-spaCy (Python) model. It tokenises the text, keeps only selected part-of-speech
-tags (e.g. nouns and proper nouns), optionally builds n-grams, filters
-short and infrequent terms, and computes term scores (TF or TF–IDF) per
-topic. The output is a tidy data frame with the top terms for each topic.
+spaCy (Python) language model. Unlike approaches that concatenate all texts
+within each topic into a single pseudo-document, this function processes text
+per document (streamed via \code{nlp.pipe()}) and aggregates term counts at the
+topic level. This design is more memory-efficient, avoids spaCy's maximum
+text-length constraint for large topics, and prevents n-grams spanning
+document boundaries.
 }
 \details{
-Internally, this function relies on a Python spaCy pipeline (accessed
-via \pkg{reticulate}) to perform tokenisation and POS-tagging. Make sure
-that a suitable Python environment is available, spaCy is installed in
-that environment, and the specified \code{spacy_model} has been downloaded.
+Tokenisation, POS-tagging, and lemmatisation are performed in Python via
+\pkg{reticulate}. Tokens are filtered to retain only selected spaCy POS tags
+(e.g. nouns and proper nouns), short tokens are removed, and optional n-grams
+are constructed over the retained lemma sequence within each document. The
+function then aggregates term frequencies per topic and computes either raw
+term frequency (TF) or a TF–IDF-like score across topics to highlight terms
+that are frequent within a topic but relatively rare in other topics.
 
-The function aggregates terms at the topic level, filters them according
-to the length and frequency thresholds, optionally constructs n-grams, and
-then computes per-topic term scores. When \code{use_tfidf = TRUE}, a
-TF–IDF-like weighting is used to highlight terms that are frequent within
-a topic but relatively rare across other topics.
+For efficiency, term counting is performed in Python and only aggregated
+(topic, term, frequency) results are returned to R. The output is a tidy data
+frame containing the top-ranking terms per topic, with a fallback mechanism
+that relaxes \code{min_term_freq} for topics that would otherwise return no
+terms.
+
+Internally, this function relies on a Python spaCy pipeline (accessed via
+\pkg{reticulate}) to perform tokenisation, POS-tagging, and lemmatisation. For
+performance and memory efficiency, documents are processed using
+\code{nlp.pipe()} and term counts are aggregated in Python before being
+returned to R.
+
+The TF–IDF-like weighting is computed across topics. For each term, the
+document frequency is defined as the number of topics in which the term occurs
+at least once. The inverse document frequency is:
+\deqn{idf = log((1 + T)/(1 + df)) + 1}
+where \eqn{T} is the number of topics and \eqn{df} is the number of topics
+containing the term. Term scores are then \eqn{tfidf = tf * idf}, where
+\eqn{tf} is the within-topic term frequency.
 }
 \examples{
 \dontrun{
-# Minimal example
 library(tibble)
 
 toy_data <- tibble::tibble(
@@ -124,16 +144,24 @@ toy_data <- tibble::tibble(
   )
 )
 
+# Unigrams + bigrams, TF–IDF
 topic_terms <- compute_topic_tf_idf_spacy_py(
-  data       = toy_data,
-  doc_col    = "doc_id",
-  topic_col  = "cluster",
-  text_col   = "text",
+  data        = toy_data,
+  doc_col     = "doc_id",
+  topic_col   = "cluster",
+  text_col    = "text",
   spacy_model = "en_core_web_sm",
   pos_keep    = c("NOUN", "PROPN"),
   min_ngram   = 1L,
   max_ngram   = 2L,
   top_n       = 5L
+)
+
+# TF only (no IDF weighting)
+topic_terms_tf <- compute_topic_tf_idf_spacy_py(
+  data       = toy_data,
+  use_tfidf  = FALSE,
+  top_n      = 5L
 )
 }
 }
