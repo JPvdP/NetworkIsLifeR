@@ -15,6 +15,7 @@
 #'   will put a label on the topics.
 #'
 #' @return A ggplot object with facetted barplots.
+#' @export
 plot_topic_terms_grid <- function(topic_terms,
                                   n_topics     = 6,
                                   n_terms      = 10,
