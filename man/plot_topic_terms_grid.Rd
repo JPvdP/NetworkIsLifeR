@@ -9,7 +9,8 @@ plot_topic_terms_grid(
   n_topics = 6,
   n_terms = 10,
   metric = c("tfidf", "n"),
-  topics = NULL
+  topics = NULL,
+  topic_labels = NULL
 )
 }
 \arguments{
@@ -30,6 +31,9 @@ You can set this to "n" if you want raw counts instead.}
 
 \item{topics}{Optional vector of topic IDs to plot explicitly.
 If provided, this overrides \code{n_topics}.}
+
+\item{topic_labels}{A dataframe with two columns ("cluster" and "label") that
+will put a label on the topics.}
 }
 \value{
 A ggplot object with facetted barplots.
