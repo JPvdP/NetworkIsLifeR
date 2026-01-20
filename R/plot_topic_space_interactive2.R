@@ -94,6 +94,7 @@ plot_topic_space_interactive2 <- function(
   }
 
   # --- 1. Prepare base topic IDs (cluster 0 = noise) ---
+  dfang::sym(cluster_col)
   df <- df %>%
     dplyr::mutate(cluster_num = as.integer(!!rlang::sym(cluster_col)))
 
@@ -174,6 +175,7 @@ plot_topic_space_interactive2 <- function(
 
   # --- 5. Centroids (only needed if we are going to draw labels on-map) ---
   # Rule requested: if labels are supplied as a *table*, do NOT plot them on the map—only in the legend.
+  # We interpret that as: when topic_labels is a data.frame, suppress centroid text layer.
   add_on_map_labels <- !labels_from_table
 
   if (add_on_map_labels) {
@@ -218,11 +220,13 @@ plot_topic_space_interactive2 <- function(
   }
 
   # --- 8. Layout ---
-  plotly::layout(
+  p <- plotly::layout(
     p,
     xaxis = list(title = "UMAP 1"),
     yaxis = list(title = "UMAP 2"),
     legend = list(title = list(text = "Topic")),
     dragmode = "zoom"
   )
+
+  p
 }
