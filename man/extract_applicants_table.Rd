@@ -2,22 +2,89 @@
 % Please edit documentation in R/extract_applicants_table.R
 \name{extract_applicants_table}
 \alias{extract_applicants_table}
-\title{extract_applicants_table}
+\title{Extract applicants into a long (one-row-per-applicant) table from patent JSONL}
 \usage{
-extract_applicants_table(file_path, max_records = NULL)
+extract_applicants_table(
+  file_path,
+  max_records = NULL,
+  max_records_total = NULL,
+  pattern = "\\\\.jsonl(\\\\.gz)?$",
+  recursive = FALSE,
+  verbose = TRUE,
+  add_source_file = FALSE
+)
 }
 \arguments{
-\item{file_path}{A path to a jsonl file exported from lens.org}
+\item{file_path}{Character scalar. Path to a JSONL/JSONL.GZ file or to a directory containing
+multiple JSONL files.}
 
-\item{max_records}{The maximum number of records to be extracted}
+\item{max_records}{Integer or \code{NULL}. Maximum number of JSONL records (lines) to process
+per file. Default \code{NULL} processes all lines in each file.}
+
+\item{max_records_total}{Integer or \code{NULL}. Optional global cap on the total number of
+rows returned across all files. Default \code{NULL}.}
+
+\item{pattern}{Character. Regular expression used to select files when \code{file_path} is a
+directory. Default matches \code{.jsonl} and \code{.jsonl.gz}.}
+
+\item{recursive}{Logical. If \code{TRUE}, searches subdirectories when \code{file_path} is a
+directory.}
+
+\item{verbose}{Logical. If \code{TRUE}, prints progress messages and per-line error messages.}
+
+\item{add_source_file}{Logical. If \code{TRUE}, adds a \code{source_file} column (the basename
+of the file that produced each row).}
 }
 \value{
-Returns a dataframe with: "lens_id" ,  "sequence" , "name" ,     "residence", "address"
+A tibble/data.frame with one row per applicant per patent. Columns include:
+\itemize{
+\item \code{lens_id}: Lens patent identifier for the record.
+\item \code{sequence}: Applicant order within the patent record.
+\item \code{name}: Extracted applicant name (via \code{safe_extract()}).
+\item \code{residence}: Applicant residence, when available.
+\item \code{address}: Extracted address, when available.
+\item \code{source_file}: Present only when \code{add_source_file = TRUE}.
+}
 }
 \description{
-This extracts information about the applicants. It will export one line per applicant
+Reads a JSON Lines (JSONL) file—or, optionally, all JSONL files in a directory—parses each
+record (one JSON object per line), and extracts applicant-level information from
+\code{biblio$parties$applicants}. The result is returned as a single aggregated
+tibble/data.frame with one row per applicant per patent.
 }
+\details{
+When \code{file_path} is a directory, input files are discovered with \code{list.files()}
+using \code{pattern} (and optionally \code{recursive}). Files ending in \code{.gz} are read
+via \code{gzfile()}. Parsing failures are handled per line and (optionally) reported via
+\code{verbose} without stopping the full run.
+
+The argument \code{max_records} limits the number of JSONL lines processed \emph{per file}.
+The argument \code{max_records_total} caps the \emph{total number of rows returned} across
+all processed files (useful for sampling large corpora).
+}
+\section{Dependencies}{
+
+Requires \pkg{jsonlite}, \pkg{purrr}, \pkg{tibble}, and \pkg{dplyr}. This function also expects
+\code{safe_extract()} to be available in scope (typically exported or internal to the package).
+}
+
 \examples{
-example_file <- system.file("extdata", "lens-export-3.jsonl", package = "NetworkIsLifeR")
-extract_applicants_table(example_file)
+\dontrun{
+# Single file
+apps1 <- extract_applicants_table("data/patents.jsonl", max_records = 1000)
+
+# Directory (aggregate across many files)
+apps_all <- extract_applicants_table("data/jsonl_batches")
+
+# Directory with provenance + global cap
+apps_cap <- extract_applicants_table("data/jsonl_batches",
+                                     max_records_total = 5000,
+                                     add_source_file = TRUE)
+}
+
+}
+\seealso{
+\code{\link[jsonlite:fromJSON]{jsonlite::fromJSON}},
+\code{\link[purrr:map_dfr]{purrr::map_dfr}},
+\code{\link[dplyr:bind_rows]{dplyr::bind_rows}}
 }
