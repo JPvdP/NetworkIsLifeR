@@ -2,30 +2,82 @@
 % Please edit documentation in R/process_patent_jsonl.R
 \name{process_patent_jsonl}
 \alias{process_patent_jsonl}
-\title{process_patent_jsonl}
+\title{Process patent JSONL files into a tidy data frame}
 \usage{
-process_patent_jsonl(file_path, max_records = NULL, verbose = TRUE)
+process_patent_jsonl(
+  file_path,
+  max_records = NULL,
+  max_records_total = NULL,
+  verbose = TRUE,
+  pattern = "\\\\.jsonl(\\\\.gz)?$",
+  recursive = FALSE,
+  add_source_file = FALSE
+)
 }
 \arguments{
-\item{file_path}{A path to a jsonl file exported from lens.org.}
+\item{file_path}{Character scalar. Path to a JSONL/JSONL.GZ file or to a directory containing
+multiple JSONL files.}
 
-\item{max_records}{The maximum number of records to be extracted.}
+\item{max_records}{Integer or \code{NULL}. Maximum number of records (lines) to process
+per file. Default \code{NULL} processes all lines.}
 
-\item{verbose}{Extra information return from the function.}
+\item{max_records_total}{Integer or \code{NULL}. Optional global cap on the total number of
+rows returned across all files. Default \code{NULL}.}
+
+\item{verbose}{Logical. If \code{TRUE}, prints progress messages and per-line errors.}
+
+\item{pattern}{Character. Regular expression used to match JSONL files when \code{file_path}
+is a directory. Default matches \code{.jsonl} and \code{.jsonl.gz}.}
+
+\item{recursive}{Logical. If \code{TRUE}, searches subdirectories when \code{file_path} is a
+directory.}
+
+\item{add_source_file}{Logical. If \code{TRUE}, adds a \code{source_file} column (the basename
+of the file that produced each row).}
 }
 \value{
-Returns a dataframe with: "lens_id"  ,            "jurisdiction"     ,    "doc_number" ,          "kind"
-"date_published"  ,     "lang"  ,               "title"      ,          "abstract",
-"app_doc_number"  ,     "app_date"   ,          "priority_date" ,        "applicants" ,
-"inventors"    ,        "ipc_classifications",   "patent_status"    ,    "granted" ,
-"grant_date"    ,       "cited_by_count" ,      "simple_family_size" ,  "extended_family_size"
+A tibble/data.frame with one row per successfully parsed JSONL record, as returned by
+\code{extract_patent_info()}. If \code{add_source_file = TRUE}, includes a \code{source_file}
+column.
 }
 \description{
-This extracts information from a lens.org patent export
+Reads one JSON Lines (JSONL) file—or, optionally, all JSONL files in a directory—parses each
+record (one JSON object per line), applies \code{extract_patent_info()} to extract a standard
+set of fields, and returns a single aggregated tibble/data.frame. Parsing errors per line are
+caught and reported (when \code{verbose = TRUE}) without aborting the full run.
 }
+\details{
+When \code{file_path} is a directory, files are discovered via \code{list.files()} using
+\code{pattern} (and optionally \code{recursive}). Files ending in \code{.gz} are read via
+\code{gzfile()}; other files are read with \code{readLines()}.
+
+The argument \code{max_records} limits the number of JSONL lines processed \emph{per file}.
+The argument \code{max_records_total} caps the \emph{total number of rows returned} across
+all processed files (useful for sampling large corpora).
+}
+\section{Dependencies}{
+
+Requires \pkg{jsonlite} for JSON parsing and \pkg{purrr} for mapping. Uses \code{dplyr::bind_rows()}
+to aggregate outputs.
+}
+
 \examples{
-library(purrr)
-library(dplyr)
-example_file <- system.file("extdata", "lens-export-3.jsonl", package = "NetworkIsLifeR")
-process_patent_jsonl(example_file)
+\dontrun{
+# Single file
+df1 <- process_patent_jsonl("data/patents.jsonl", max_records = 500)
+
+# Directory (aggregate all files)
+df_all <- process_patent_jsonl("data/jsonl_batches")
+
+# Directory with global cap + provenance
+df_cap <- process_patent_jsonl("data/jsonl_batches",
+                               max_records_total = 10000,
+                               add_source_file = TRUE)
+}
+
+}
+\seealso{
+\code{\link[jsonlite:fromJSON]{jsonlite::fromJSON}},
+\code{\link[purrr:map_dfr]{purrr::map_dfr}},
+\code{\link[dplyr:bind_rows]{dplyr::bind_rows}}
 }
