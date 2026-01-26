@@ -38,7 +38,7 @@ clean_company_names <- function(df,
                                 ignore_case   = TRUE,
                                 trim          = TRUE,
                                 return_rule   = FALSE) {
-
+  library(tidyverse)
   if (!is.data.frame(df)) stop("`df` must be a data.frame or tibble.")
   if (!is.character(company_col) || length(company_col) != 1) {
     stop("`company_col` must be a single character string.")
@@ -122,51 +122,4 @@ clean_company_names <- function(df,
   }
 
   df
-}
-
-# Helpers -------------------------------------------------------------------
-
-.rule_matches <- function(x, type, tokens, pattern, ignore_case = TRUE) {
-  # x: character vector
-  # type: "ALL" / "ANY" (others can be added)
-  # tokens: character vector (regexes) or NULL
-  # pattern: single regex or NA
-
-  # Prefer explicit pattern if supplied
-  if (!all(is.na(pattern))) {
-    pat <- as.character(pattern)[1]
-    return(grepl(pat, x, ignore.case = ignore_case, perl = TRUE))
-  }
-
-  # Fall back to tokens
-  if (is.null(tokens) || length(tokens) == 0 || all(is.na(tokens))) {
-    return(rep(FALSE, length(x)))
-  }
-
-  tokens <- as.character(tokens)
-  type <- toupper(as.character(type)[1])
-
-  if (type == "ALL") {
-    out <- rep(TRUE, length(x))
-    for (t in tokens) {
-      out <- out & grepl(t, x, ignore.case = ignore_case, perl = TRUE)
-    }
-    return(out)
-  }
-
-  if (type == "ANY") {
-    out <- rep(FALSE, length(x))
-    for (t in tokens) {
-      out <- out | grepl(t, x, ignore.case = ignore_case, perl = TRUE)
-    }
-    return(out)
-  }
-
-  stop("Unsupported rule `type`: ", type, " (supported: 'ALL', 'ANY').")
-}
-
-.collapse_spaces <- function(x) {
-  x <- gsub("[[:space:]]+", " ", x, perl = TRUE)
-  x <- trimws(x)
-  x
 }

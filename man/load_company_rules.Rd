@@ -2,35 +2,51 @@
 % Please edit documentation in R/load_company_rules.R
 \name{load_company_rules}
 \alias{load_company_rules}
-\title{load_company_rules}
+\title{Load company name cleaning rules from an .RData/.rda file}
 \usage{
-load_company_rules(file = NULL)
+load_company_rules(
+  file = NULL,
+  package = "NetworkIsLifeR",
+  default_inst_file = "company_rules.rdata",
+  object_names = c("rules", "company_rules")
+)
 }
 \arguments{
-\item{file}{Optional path to a custom rules file. If not supplied,
-the function loads the package's default rules from
-\code{inst/company_rules.R}.}
+\item{file}{Optional path to a \code{.RData}/\code{.rda} file containing a rules
+object. If \code{NULL}, the function loads \code{default_inst_file} from the
+installed \code{package}.}
+
+\item{package}{Package name to search for the default installed rules file
+when \code{file = NULL}.}
+
+\item{default_inst_file}{Filename expected in \code{inst/} of the package and
+retrievable via \code{\link[base]{system.file}}.}
+
+\item{object_names}{Character vector of preferred object names to search for
+inside the loaded file (first match is used).}
 }
 \value{
-A tibble containing the rule set.
+A rules table as a data.frame or tibble (if \pkg{tibble} is installed),
+with validated structure and defensively normalised column types.
 }
 \description{
-This function loads the default company name cleaning rules that ship
-with the package. The rules are stored in an external R script
-(\code{company_rules.R}) located in the \verb{inst/} directory of the package.
-Users may edit this file after installation to customize the rule set.
+Loads a rules table (data.frame/tibble) containing company name cleaning and
+harmonisation rules. By default, the function reads an installed rules file
+shipped with the package (e.g., \code{inst/company_rules.rdata}). The loaded
+object is searched by name (see \code{object_names}); if no named object is
+found, the function auto-detects the first data.frame that contains the
+required columns.
 }
 \details{
-The file must define an object named \code{rules}, typically a tibble with
-columns such as \code{priority}, \code{type}, \code{tokens}, \code{pattern}, and \code{canonical}.
+The rules table must contain at least the following columns:
+\code{priority}, \code{type}, \code{tokens}, \code{pattern}, \code{canonical}.
+The \code{tokens} column must be a list-column (list of character vectors).
 }
 \examples{
-\dontrun{
-# Load the default rules included in the package
+# Load the package default rules (shipped in inst/)
 rules <- load_company_rules()
 
-# Load a user-modified rule file
-custom_rules <- load_company_rules("my_rules.R")
-}
+# Load rules from a custom file
+# rules <- load_company_rules(file = "path/to/company_rules.rdata")
 
 }
