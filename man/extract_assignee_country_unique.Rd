@@ -4,21 +4,29 @@
 \alias{extract_assignee_country_unique}
 \title{Assign Most Frequent Country and Address to Each Assignee}
 \usage{
-extract_assignee_country_unique(df)
+extract_assignee_country_unique(
+  df,
+  name_col = "name",
+  residence_col = "residence",
+  address_col = "address"
+)
 }
 \arguments{
-\item{df}{A data frame containing patent assignee information with at least
-the following columns:
-\itemize{
-\item \code{name}: Character vector with assignee names
-\item \code{residence}: Character vector with country information
-\item \code{address}: Character vector with address information
-}}
+\item{df}{A data frame containing patent assignee information.}
+
+\item{name_col}{Character string specifying the column name containing
+assignee names. Default is "name".}
+
+\item{residence_col}{Character string specifying the column name containing
+country/residence information. Default is "residence".}
+
+\item{address_col}{Character string specifying the column name containing
+address information. Default is "address".}
 }
 \value{
 A data frame with one row per unique assignee name containing:
 \itemize{
-\item \code{name}: Unique assignee name
+\item Column with assignee names (using the name specified in \code{name_col})
 \item \code{country}: Most frequent residence/country for this assignee
 \item \code{country_pct}: Percentage of records with this country (0-100)
 \item \code{address}: Most frequent address for this assignee
@@ -44,7 +52,7 @@ The percentage values help identify assignees with consistent location
 information (high percentages) versus those with high variability (low percentages).
 }
 \examples{
-# Create sample patent data
+# Create sample patent data with standard column names
 patent_data <- data.frame(
   lens_id = c("L1", "L2", "L3", "L4", "L5"),
   sequence = c(1, 1, 1, 2, 2),
@@ -54,11 +62,21 @@ patent_data <- data.frame(
   stringsAsFactors = FALSE
 )
 
-# Assign most frequent country and address
+# Using default column names
 result <- extract_assignee_country_unique(patent_data)
-print(result)
-#   name       country country_pct address  address_pct total_records
-#   Acme Corp  USA     66.7        New York 66.7        3
-#   Tech Inc   Germany 100.0       Berlin   50.0        2
+
+# Create data with different column names
+patent_data2 <- data.frame(
+  applicant = c("Acme Corp", "Acme Corp", "Tech Inc"),
+  country = c("USA", "USA", "Germany"),
+  location = c("New York", "New York", "Berlin"),
+  stringsAsFactors = FALSE
+)
+
+# Using custom column names
+result2 <- extract_assignee_country_unique(patent_data2,
+                                 name_col = "applicant",
+                                 residence_col = "country",
+                                 address_col = "location")
 
 }

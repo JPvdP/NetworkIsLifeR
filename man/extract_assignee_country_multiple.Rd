@@ -2,23 +2,31 @@
 % Please edit documentation in R/extract_assignee_country_multiple.R
 \name{extract_assignee_country_multiple}
 \alias{extract_assignee_country_multiple}
-\title{Geolocalisation with multiple countries per organisation}
+\title{Summarize Assignee Information by Country}
 \usage{
-extract_assignee_country_multiple(df)
+extract_assignee_country_multiple(
+  df,
+  name_col = "name",
+  residence_col = "residence",
+  address_col = "address"
+)
 }
 \arguments{
-\item{df}{A data frame containing patent assignee information with at least
-the following columns:
-\itemize{
-\item \code{name}: Character vector with assignee names
-\item \code{residence}: Character vector with country information
-\item \code{address}: Character vector with address information
-}}
+\item{df}{A data frame containing patent assignee information.}
+
+\item{name_col}{Character string specifying the column name containing
+assignee names. Default is "name".}
+
+\item{residence_col}{Character string specifying the column name containing
+country/residence information. Default is "residence".}
+
+\item{address_col}{Character string specifying the column name containing
+address information. Default is "address".}
 }
 \value{
 A data frame with one row per unique assignee-country pair containing:
 \itemize{
-\item \code{name}: Assignee name
+\item Column with assignee names (using the name specified in \code{name_col})
 \item \code{residence}: Country for this assignee-country pair
 \item \code{country_records}: Number of patent records for this name-country combination
 \item \code{country_pct}: Percentage of this assignee's total patents from this country (0-100)
@@ -35,7 +43,7 @@ identifies the most frequent address and calculates the percentage of the
 assignee's total patents associated with each country.
 }
 \details{
-The function filters out rows where either \code{name} or \code{residence} is NA.
+The function filters out rows where either the name column or residence column is NA.
 For the address field, NA values are excluded from frequency calculations.
 If all addresses for a name-country pair are NA, the function returns NA for
 the address fields.
@@ -51,7 +59,7 @@ This function is particularly useful for:
 }
 }
 \examples{
-# Create sample patent data
+# Create sample patent data with standard column names
 patent_data <- data.frame(
   lens_id = c("L1", "L2", "L3", "L4", "L5", "L6"),
   sequence = c(1, 1, 1, 2, 2, 3),
@@ -62,16 +70,25 @@ patent_data <- data.frame(
   stringsAsFactors = FALSE
 )
 
-# Get assignee-country summary
+# Using default column names
 result <- extract_assignee_country_multiple(patent_data)
-print(result)
-#   name        residence country_records country_pct total_records address  address_pct
-#   Global Corp USA       3               60.0        5             New York 66.7
-#   Global Corp Germany   2               40.0        5             Berlin   100.0
-#   Local Inc   Canada    1               100.0       1             Toronto  100.0
+
+# Create data with different column names
+patent_data2 <- data.frame(
+  applicant = c("Global Corp", "Global Corp", "Local Inc"),
+  country = c("USA", "Germany", "Canada"),
+  location = c("New York", "Berlin", "Toronto"),
+  stringsAsFactors = FALSE
+)
+
+# Using custom column names
+result2 <- extract_assignee_country_multiple(patent_data2,
+                                     name_col = "applicant",
+                                     residence_col = "country",
+                                     address_col = "location")
 
 }
 \seealso{
-\code{\link{assign_most_frequent}} for assigning a single country
+\code{\link{extract_assignee_country_unique}} for assigning a single country
 and address to each assignee.
 }

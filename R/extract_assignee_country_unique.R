@@ -5,17 +5,17 @@
 #' assignee name. This is useful for consolidating assignee information when
 #' the same entity appears with different locations across multiple patents.
 #'
-#' @param df A data frame containing patent assignee information with at least
-#'   the following columns:
-#'   \itemize{
-#'     \item \code{name}: Character vector with assignee names
-#'     \item \code{residence}: Character vector with country information
-#'     \item \code{address}: Character vector with address information
-#'   }
+#' @param df A data frame containing patent assignee information.
+#' @param name_col Character string specifying the column name containing
+#'   assignee names. Default is "name".
+#' @param residence_col Character string specifying the column name containing
+#'   country/residence information. Default is "residence".
+#' @param address_col Character string specifying the column name containing
+#'   address information. Default is "address".
 #'
 #' @return A data frame with one row per unique assignee name containing:
 #'   \itemize{
-#'     \item \code{name}: Unique assignee name
+#'     \item Column with assignee names (using the name specified in \code{name_col})
 #'     \item \code{country}: Most frequent residence/country for this assignee
 #'     \item \code{country_pct}: Percentage of records with this country (0-100)
 #'     \item \code{address}: Most frequent address for this assignee
@@ -35,9 +35,10 @@
 #' information (high percentages) versus those with high variability (low percentages).
 #'
 #' @import dplyr
+#' @importFrom rlang sym
 #'
 #' @examples
-#' # Create sample patent data
+#' # Create sample patent data with standard column names
 #' patent_data <- data.frame(
 #'   lens_id = c("L1", "L2", "L3", "L4", "L5"),
 #'   sequence = c(1, 1, 1, 2, 2),
@@ -47,28 +48,48 @@
 #'   stringsAsFactors = FALSE
 #' )
 #'
-#' # Assign most frequent country and address
+#' # Using default column names
 #' result <- extract_assignee_country_unique(patent_data)
-#' print(result)
-#' #   name       country country_pct address  address_pct total_records
-#' #   Acme Corp  USA     66.7        New York 66.7        3
-#' #   Tech Inc   Germany 100.0       Berlin   50.0        2
+#'
+#' # Create data with different column names
+#' patent_data2 <- data.frame(
+#'   applicant = c("Acme Corp", "Acme Corp", "Tech Inc"),
+#'   country = c("USA", "USA", "Germany"),
+#'   location = c("New York", "New York", "Berlin"),
+#'   stringsAsFactors = FALSE
+#' )
+#'
+#' # Using custom column names
+#' result2 <- extract_assignee_country_unique(patent_data2,
+#'                                  name_col = "applicant",
+#'                                  residence_col = "country",
+#'                                  address_col = "location")
 #'
 #' @export
-extract_assignee_country_unique <- function(df) {
+extract_assignee_country_unique <- function(df,
+                                 name_col = "name",
+                                 residence_col = "residence",
+                                 address_col = "address") {
+
   # Check required columns exist
-  required_cols <- c("name", "residence", "address")
+  required_cols <- c(name_col, residence_col, address_col)
   missing_cols <- setdiff(required_cols, names(df))
 
   if (length(missing_cols) > 0) {
     stop("Missing required columns: ", paste(missing_cols, collapse = ", "))
   }
 
+  # Convert column names to symbols for tidy evaluation
+  name_sym <- rlang::sym(name_col)
+  residence_sym <- rlang::sym(residence_col)
+  address_sym <- rlang::sym(address_col)
+
   df %>%
-    dplyr::group_by(name) %>%
+    dplyr::group_by(!!name_sym) %>%
     dplyr::summarise(
       country = {
-        valid_vals <- residence[!is.na(residence)]
+        valid_vals <- !!residence_sym
+        valid_vals <- valid_vals[!is.na(valid_vals)]
         if(length(valid_vals) == 0) {
           NA_character_
         } else {
@@ -76,7 +97,8 @@ extract_assignee_country_unique <- function(df) {
         }
       },
       country_pct = {
-        valid_vals <- residence[!is.na(residence)]
+        valid_vals <- !!residence_sym
+        valid_vals <- valid_vals[!is.na(valid_vals)]
         if(length(valid_vals) == 0) {
           NA_real_
         } else {
@@ -84,7 +106,8 @@ extract_assignee_country_unique <- function(df) {
         }
       },
       address = {
-        valid_vals <- address[!is.na(address)]
+        valid_vals <- !!address_sym
+        valid_vals <- valid_vals[!is.na(valid_vals)]
         if(length(valid_vals) == 0) {
           NA_character_
         } else {
@@ -92,7 +115,8 @@ extract_assignee_country_unique <- function(df) {
         }
       },
       address_pct = {
-        valid_vals <- address[!is.na(address)]
+        valid_vals <- !!address_sym
+        valid_vals <- valid_vals[!is.na(valid_vals)]
         if(length(valid_vals) == 0) {
           NA_real_
         } else {
