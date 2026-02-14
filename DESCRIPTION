@@ -21,6 +21,7 @@ Imports:
     magrittr,
     udpipe,
     quanteda,
-    rlang
+    rlang,
+    stringr
 Suggests:
     readr
