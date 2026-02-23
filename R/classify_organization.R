@@ -85,6 +85,10 @@ classify_organization <- function(data, org_column) {
     "univers\\b",          # Universidad, Uniwersytet
     "univ\\b",             # Common abbreviation
     "\\buni\\b",           # Short form
+    "universiteit",
+    "research",
+    "wageningen ur",
+    "radboudumc",
     "instituut",
     "institute",
     "hogeschool",
