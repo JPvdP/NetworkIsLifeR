@@ -3,6 +3,7 @@
 export(classify_organization)
 export(clean_and_match_companies)
 export(clean_company_names)
+export(compute_fractional_counts)
 export(compute_topic_terms_udpipe)
 export(compute_topic_tf_idf_spacy_py)
 export(extract_abstract_publications_lens)
