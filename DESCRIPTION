@@ -22,6 +22,9 @@ Imports:
     udpipe,
     quanteda,
     rlang,
-    stringr
+    stringr,
+    httr2,
+    janitor,
+    readr
 Suggests:
     readr
