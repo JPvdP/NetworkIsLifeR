@@ -4,7 +4,7 @@
 \alias{fingerprint_clean}
 \title{Clean a character column using fingerprint clustering}
 \usage{
-fingerprint_clean(df, col, clean_col = "clean")
+fingerprint_clean(df, col, clean_col = "clean", company = FALSE)
 }
 \arguments{
 \item{df}{A data frame.}
@@ -14,6 +14,12 @@ string (\code{"brand"}).}
 
 \item{clean_col}{A single string giving the name of the new column that will
 hold the canonical reference name. Defaults to \code{"clean"}.}
+
+\item{company}{Logical. If \code{TRUE}, legal entity suffixes are stripped and
+common term variants are contracted before clustering, enabling
+company-name harmonisation across different legal forms and naming
+conventions. The original values are preserved unchanged. Defaults to
+\code{FALSE}.}
 }
 \value{
 The original data frame with one additional column named \code{clean_col}.
@@ -25,42 +31,76 @@ Clusters values in a data frame column using fingerprint keying (see
 \code{\link[=fingerprint_key]{fingerprint_key()}}) and adds a new column containing the canonical
 reference name for each cluster. The canonical name is the \strong{most frequent}
 raw value within the cluster; ties are broken alphabetically (the
-lexicographically first value among the tied values is chosen), so output
-is always deterministic.
+lexicographically first value among the tied values is chosen), ensuring
+deterministic output.
 }
 \details{
-The fingerprinting pipeline (based on OpenRefine's algorithm) treats two
-strings as equivalent when they differ only in:
-\itemize{
-\item Case (\code{"Philips"} vs \code{"PHILIPS"})
-\item Diacritics (\code{"café"} vs \code{"cafe"})
-\item Punctuation (\code{"U.S.A"} vs \code{"USA"})
-\item Word order or duplication (\code{"Smith John"} vs \code{"John Smith"})
+The fingerprinting pipeline treats two strings as equivalent when they differ
+only in case, diacritics, punctuation, or word order.
+
+When \code{company = TRUE}, two additional steps are applied to the fingerprint
+key \emph{before} clustering (the raw values in your data are never modified):
+\enumerate{
+\item \strong{Legal suffix stripping} — entity-type suffixes are removed so that
+\code{"Philips BV"}, \code{"Philips GmbH"}, and \code{"Philips"} all map to the same
+cluster. The suffix list covers all EU-27 member states, the United
+States, and China. Matching is case-insensitive and handles punctuation
+variants automatically (\code{"B.V."}, \code{"bv"}, \code{"BV"} are all caught).
+Stacked suffixes (e.g. \code{"BV Holding"}) are removed iteratively.
+\item \strong{Term harmonisation} — common long-form descriptors are contracted to a
+standard abbreviation so that \code{"Philips Technology"} and \code{"Philips Tech"}
+cluster together. The contractions applied are:
+\tabular{ll}{
+\strong{Long form(s)} \tab \strong{Abbreviation} \cr
+technology / technologies / technological \tab tech \cr
+management / mgmt \tab mgt \cr
+industry / industries / industrial \tab ind \cr
+company / companies \tab co \cr
+international \tab intl \cr
+laboratory / laboratories / labs \tab lab \cr
+manufacturing / manufacturer \tab mfg \cr
+development / developer \tab dev \cr
+}
+All matching is whole-word and case-insensitive.
 }
 }
 \examples{
 df <- data.frame(
-  brand = c("Philips", "philips", "PHILIPS", "Sony", "SONY", "sony", NA),
+  name = c(
+    "Philips BV", "Philips GmbH", "PHILIPS", "Philips B.V.",
+    "Philips Technology BV", "Philips Tech",
+    "Sony Corp.", "Sony Corporation", "SONY",
+    NA
+  ),
   stringsAsFactors = FALSE
 )
 
-# Default output column name "clean"
-fingerprint_clean(df, brand)
-#>     brand   clean
-#> 1 Philips Philips    <- "Philips" appears once, others once too;
-#> 2 philips Philips       alphabetically first among tied = "Philips"
-#> 3 PHILIPS Philips
-#> 4    Sony    Sony
-#> 5    SONY    Sony
-#> 6    sony    Sony
-#> 7    <NA>    <NA>
+# Standard mode — legal suffixes and term variants affect clustering
+fingerprint_clean(df, name)
+
+# Company mode — suffixes stripped and terms harmonised before clustering.
+# "Philips BV", "Philips GmbH", "PHILIPS" all map to the same cluster;
+# "Philips Technology BV" and "Philips Tech" also cluster together
+# (both key to "philips tech" after stripping and harmonisation).
+fingerprint_clean(df, name, company = TRUE)
+#>                    name        clean
+#> 1            Philips BV   Philips BV
+#> 2          Philips GmbH   Philips BV
+#> 3               PHILIPS   Philips BV
+#> 4          Philips B.V.   Philips BV
+#> 5  Philips Technology BV  Philips Technology BV
+#> 6          Philips Tech   Philips Technology BV
+#> 7            Sony Corp.     Sony Corp.
+#> 8      Sony Corporation     Sony Corp.
+#> 9                  SONY     Sony Corp.
+#> 10                 <NA>         <NA>
 
 # Custom output column name
-fingerprint_clean(df, brand, clean_col = "brand_clean")
+fingerprint_clean(df, name, clean_col = "name_clean", company = TRUE)
 
-# Column name passed as a string (useful inside other functions)
-col <- "brand"
-fingerprint_clean(df, col = col)
+# Column name passed as a string (useful when called programmatically)
+col <- "name"
+fingerprint_clean(df, col = col, company = TRUE)
 
 }
 \references{
@@ -68,6 +108,7 @@ OpenRefine FingerprintKeyer source:
 \url{https://github.com/OpenRefine/OpenRefine/blob/master/modules/core/src/main/java/com/google/refine/clustering/binning/FingerprintKeyer.java}
 }
 \seealso{
-\code{\link[=fingerprint_key]{fingerprint_key()}} for the underlying keying algorithm,
-\code{\link[=fingerprint_key_vec]{fingerprint_key_vec()}} to retrieve the raw fingerprint keys.
+\code{\link[=fingerprint_key]{fingerprint_key()}} for the underlying keying algorithm and full
+details of the \code{company} pipeline,
+\code{\link[=fingerprint_key_vec]{fingerprint_key_vec()}} to inspect the raw fingerprint keys directly.
 }

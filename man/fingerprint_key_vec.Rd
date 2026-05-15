@@ -4,10 +4,14 @@
 \alias{fingerprint_key_vec}
 \title{Compute fingerprint keys for a character vector}
 \usage{
-fingerprint_key_vec(x)
+fingerprint_key_vec(x, company = FALSE)
 }
 \arguments{
 \item{x}{A character vector.}
+
+\item{company}{Logical. Passed to \code{\link[=fingerprint_key]{fingerprint_key()}}. If \code{TRUE}, legal
+entity suffixes are stripped and common term variants are contracted before
+fingerprinting. Defaults to \code{FALSE}.}
 }
 \value{
 A character vector of fingerprint keys the same length as \code{x},
@@ -15,15 +19,25 @@ with \code{NA} values preserved.
 }
 \description{
 A vectorised wrapper around \code{\link[=fingerprint_key]{fingerprint_key()}} that returns a character
-vector of fingerprint keys with the same length as the input.
+vector of fingerprint keys the same length as the input.
 }
 \examples{
-x <- c("Philips", "philips", "PHILIPS", "Sony", "SONY", NA)
+x <- c("Philips BV", "Philips GmbH", "PHILIPS",
+        "Sony Corp.", "Sony", "SONY CORPORATION", NA)
+
+# Standard mode — suffixes remain in the key
 fingerprint_key_vec(x)
-# [1] "philips" "philips" "philips" "sony"    "sony"    NA
+
+# Company mode — all Philips / Sony variants share one key each
+fingerprint_key_vec(x, company = TRUE)
+# [1] "philips" "philips" "philips" "sony" "sony" "sony" NA
+
+x2 <- c("Philips Technology BV", "Philips Tech", "Philips Technologies")
+fingerprint_key_vec(x2, company = TRUE)
+# [1] "philips tech" "philips tech" "philips tech"
 
 }
 \seealso{
-\code{\link[=fingerprint_key]{fingerprint_key()}} for the scalar version,
+\code{\link[=fingerprint_key]{fingerprint_key()}} for full documentation of the \code{company} pipeline,
 \code{\link[=fingerprint_clean]{fingerprint_clean()}} to apply clustering to a data frame column.
 }

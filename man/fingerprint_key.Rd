@@ -4,10 +4,14 @@
 \alias{fingerprint_key}
 \title{Compute the fingerprint key for a single string}
 \usage{
-fingerprint_key(s)
+fingerprint_key(s, company = FALSE)
 }
 \arguments{
 \item{s}{A single character string. \code{NA} returns \code{NA_character_}.}
+
+\item{company}{Logical. If \code{TRUE}, legal entity suffixes are stripped and
+common term variants are contracted before the fingerprint key is
+computed. Defaults to \code{FALSE}.}
 }
 \value{
 A single character string containing the fingerprint key, or
@@ -21,14 +25,57 @@ rejoined with a single space. Two strings that differ only in case,
 diacritics, punctuation, or word order will produce the same key and
 therefore belong to the same cluster.
 }
+\details{
+When \code{company = TRUE}, two additional steps are applied to the normalised
+string \emph{before} fingerprinting, enabling company-name harmonisation across
+different legal forms and naming conventions:
+\enumerate{
+\item \strong{Legal suffix stripping} — entity-type suffixes (e.g. \code{"BV"}, \code{"GmbH"},
+\code{"Inc."}, \code{"Ltd"}, \code{"SARL"}) are removed. The list covers all EU-27
+member states, the United States, and China. Matching is
+case-insensitive and punctuation-agnostic (\code{"B.V."}, \code{"bv"}, and \code{"BV"}
+are all recognised). Stacked suffixes (e.g. \code{"BV Holding"}) are removed
+iteratively.
+\item \strong{Term harmonisation} — common long-form descriptors are contracted to
+their standard abbreviation so that, for example, \code{"Philips Technology"}
+and \code{"Philips Tech"} share the same key. The contractions applied are:
+\tabular{ll}{
+\strong{Long form} \tab \strong{Abbreviation} \cr
+technology / technologies / technological \tab tech \cr
+management / mgmt \tab mgt \cr
+industry / industries / industrial \tab ind \cr
+company / companies \tab co \cr
+international \tab intl \cr
+laboratory / laboratories / labs \tab lab \cr
+manufacturing / manufacturer \tab mfg \cr
+development / developer \tab dev \cr
+}
+All matching is whole-word and case-insensitive, so partial matches
+inside longer words (e.g. \code{"mismanagement"}) are never affected.
+}
+
+The raw value passed in is \strong{never modified}; only the internal clustering
+key is affected.
+}
 \examples{
+# --- Standard usage ---------------------------------------------------------
 fingerprint_key("Philips")           # "philips"
-fingerprint_key("PHILIPS")           # "philips" — same key
-fingerprint_key("Cafe\u0301")        # "cafe"    — diacritics removed
-fingerprint_key("Stra\u00DFe")       # "strasse" — ß expanded
-fingerprint_key("foo bar foo")       # "bar foo" — deduplication
-fingerprint_key("Hello, World!")     # "hello world" — punctuation stripped
+fingerprint_key("PHILIPS")           # "philips"
+fingerprint_key("Stra\u00DFe")       # "strasse"
+fingerprint_key("Hello, World!")     # "hello world"
 fingerprint_key(NA_character_)       # NA
+
+# --- Company mode: legal suffix stripping -----------------------------------
+fingerprint_key("Philips BV",    company = TRUE)  # "philips"
+fingerprint_key("Philips GmbH",  company = TRUE)  # "philips"
+fingerprint_key("Philips B.V.",  company = TRUE)  # "philips"  (punct variant)
+fingerprint_key("Philips",       company = TRUE)  # "philips"  (same key)
+
+# --- Company mode: term harmonisation ---------------------------------------
+fingerprint_key("Philips Technology", company = TRUE)  # "philips tech"
+fingerprint_key("Philips Tech",       company = TRUE)  # "philips tech"
+fingerprint_key("Siemens Management Solutions BV", company = TRUE)
+# -> "mgt siemens solutions"  (BV stripped, management -> mgt)
 
 }
 \references{
