@@ -128,7 +128,7 @@ clean_and_match_companies <- function(df, name_col, similarity_threshold = 0.85)
   #---------------------------#
   df <- df %>%
     dplyr::mutate(
-      tokens = stingr::str_split(Clean, " +"),
+      tokens = stringr::str_split(Clean, " +"),
       Clean2  = sapply(tokens, function(x) paste(sort(x), collapse = " "))
     ) %>%
     dplyr::select(-tokens)
